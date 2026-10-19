@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Canyon Keep — The First Assault</title><link rel="stylesheet" href="styles.css"></head>
+<body>
+  <div class="app">
+    <header class="topbar"><div class="brand"><span class="crest" aria-hidden="true">♜</span><div><h1>CANYON KEEP</h1><p>A castle is a promise.</p></div></div><div id="resources" class="resources"></div><button id="mute" class="quiet" title="Mute audio (M)" aria-label="Toggle audio">SOUND ON <kbd>M</kbd></button></header>
+    <main class="workspace"><aside id="palette" class="palette" aria-label="Construction tools"></aside><section class="theater" aria-label="The Canyon Keep battlefield"><div class="map-heading"><span id="phase-label">PREPARATION</span><span id="clock">DESIGN · DEFEND · REBUILD</span></div><div class="canvas-wrap"><canvas id="battlefield" width="1280" height="720" aria-label="Top-down battlefield. Select a construction tool and click or drag to build." tabindex="0"></canvas><div id="announcement" class="announcement" aria-live="polite"></div><div id="results" class="results" hidden></div></div><div id="status" class="status" role="status">Build across the canyon. Leave a gate for the trade road.</div></section></main>
+    <footer class="bottombar"><div id="battle-stats" class="battle-stats"></div><div id="actions" class="actions"></div></footer><div class="help"><span><kbd>1–7</kbd> BUILD <kbd>X</kbd> DEMOLISH <kbd>ESC</kbd> CANCEL</span><span><kbd>SPACE</kbd> RELEASE TITAN <kbd>P</kbd> PAUSE <kbd>F</kbd> SPEED</span></div>
+  </div><script type="module" src="src/main.js"></script>
+</body></html>

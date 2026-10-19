@@ -1,0 +1,195 @@
+import { CONFIG } from '../config.js';
+import { KEEP, SITES, SPAWNS, WIDTH } from '../data/map.js';
+import { tileAt, structureAt, isWalkable, emit } from './grid.js';
+import { homeInhabitants } from './inhabitants.js';
+
+const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const failure = (reason, cost = 0) => ({ valid: false, ok: false, reason, cost });
+
+function supported(state, tower, excludedId = null) {
+  return ORTHOGONAL.some(([dx, dy]) => {
+    const s = structureAt(state, tower.x + dx, tower.y + dy);
+    return s && s.id !== excludedId && (s.type === 'wall' || s.type === 'gate');
+  });
+}
+
+// Gates and the keep are traversable for merchants; all other buildings block.
+export function hasTradeRoad(state, candidate = null) {
+  const blocked = (x, y) => {
+    if (!isWalkable(x, y)) return true;
+    const s = candidate && x >= candidate.x && y >= candidate.y &&
+      x < candidate.x + candidate.w && y < candidate.y + candidate.h
+      ? candidate : structureAt(state, x, y);
+    return s && s.type !== 'gate' && s.type !== 'keep';
+  };
+  const seen = new Set();
+  const queue = [{ x: KEEP.x, y: KEEP.y }];
+  seen.add(KEEP.y * WIDTH + KEEP.x);
+  for (let i = 0; i < queue.length; i++) {
+    const { x, y } = queue[i];
+    if (SPAWNS.some(s => s.x === x && s.y === y)) return true;
+    for (const [dx, dy] of ORTHOGONAL) {
+      const nx = x + dx, ny = y + dy, key = ny * WIDTH + nx;
+      if (seen.has(key) || blocked(nx, ny)) continue;
+      seen.add(key);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return false;
+}
+
+export function placement(state, type, x, y) {
+  const def = CONFIG.structures[type];
+  if (!def || type === 'keep') return failure('Select a construction tool');
+  if (state.phase !== 'prep') return failure('Construction is available during preparation', def.cost);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return failure('Choose a map tile', def.cost);
+  if (type === 'pendulum') {
+    const site = SITES.find(s => s.x === x && s.y === y);
+    if (!site) return failure('Choose one of the three cliff mount sites', def.cost);
+    if (state.pendulum) return failure('Only one Titan\'s Pendulum may be built', def.cost);
+    if (state.gold < def.cost) return failure('Not enough gold', def.cost);
+    return { valid: true, ok: true, reason: '', cost: def.cost, siteId: site.id };
+  }
+  for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
+    const tx = x + dx, ty = y + dy;
+    if (tx < CONFIG.spawnSafeColumns) return failure('Keep the spawn approach clear', def.cost);
+    if (!'.C'.includes(tileAt(tx, ty))) return failure('Build on canyon or castle floor; ledges cannot support buildings', def.cost);
+    if (structureAt(state, tx, ty)) return failure('Another structure occupies this tile', def.cost);
+  }
+  if (type === 'tower' && tileAt(x, y) !== 'C' && !supported(state, { x, y })) {
+    return failure('Canyon towers must adjoin a wall or gate', def.cost);
+  }
+  if (!hasTradeRoad(state, { type, x, y, w: def.w, h: def.h })) {
+    return failure('Blocks the trade road — add a gate', def.cost);
+  }
+  if (state.gold < def.cost) return failure('Not enough gold', def.cost);
+  return { valid: true, ok: true, reason: '', cost: def.cost };
+}
+
+export function place(state, type, x, y) {
+  const check = placement(state, type, x, y);
+  if (!check.valid) return check;
+  const def = CONFIG.structures[type];
+  const id = `${type}-${state.nextId++}`;
+  let structure;
+  if (type === 'pendulum') {
+    const site = SITES.find(s => s.id === check.siteId);
+    structure = { ...site, id, type, siteId: site.id,
+      cost: def.cost, status: 'ready', angle: site.centerAngle-site.halfSweep,
+      elapsed: 0, swingId: 0, hitIds: [] };
+    state.pendulum = structure;
+  } else {
+    structure = { id, type, x, y, w: def.w, h: def.h, hp: def.hp,
+      maxHp: def.hp, cost: def.cost, destroyed: false };
+    state.structures.push(structure);
+    state.flowRevision = (state.flowRevision ?? 0) + 1;
+    state.rubble = (state.rubble ?? []).filter(r => !(r.x === x && r.y === y));
+  }
+  state.gold -= def.cost;
+  if (type === 'house') homeInhabitants(state);
+  emit(state, 'build', { structureId: id, typeOfStructure: type, x, y });
+  return { ...check, structure };
+}
+
+export function lineTiles(x0, y0, x1, y1) {
+  if (![x0, y0, x1, y1].every(Number.isInteger)) return [];
+  const result = [{ x: x0, y: y0 }];
+  let x = x0, y = y0;
+  while (x !== x1) { x += Math.sign(x1 - x); result.push({ x, y }); }
+  while (y !== y1) { y += Math.sign(y1 - y); result.push({ x, y }); }
+  return result;
+}
+
+export function previewLine(state, type, x0, y0, x1, y1) {
+  const scratch = { ...state, structures: state.structures.map(s => ({ ...s })),
+    rubble: [...(state.rubble ?? [])], events: [], eventLog: [] };
+  const tiles = lineTiles(x0, y0, x1, y1).map(({ x, y }) => {
+    const result = placement(scratch, type, x, y);
+    if (result.valid) place(scratch, type, x, y);
+    return { x, y, ...result };
+  });
+  return { tiles, cost: tiles.filter(t => t.valid).reduce((n, t) => n + t.cost, 0),
+    totalCost: tiles.length * (CONFIG.structures[type]?.cost ?? 0),
+    reason: tiles.find(t => !t.valid)?.reason ?? '' };
+}
+
+export function placeLine(state, type, x0, y0, x1, y1) {
+  if (!['wall', 'gate', 'barricade'].includes(type)) return failure('This tool places one building at a time');
+  const results = [];
+  for (const { x, y } of lineTiles(x0, y0, x1, y1)) {
+    const result = place(state, type, x, y);
+    results.push({ x, y, ...result });
+    if (state.gold < CONFIG.structures[type].cost) break;
+  }
+  return { ok: results.some(r => r.ok), placed: results.filter(r => r.ok).length,
+    results, reason: results.find(r => !r.ok)?.reason ?? '' };
+}
+
+export function demolish(state, x, y) {
+  if (state.phase !== 'prep') return failure('Demolish during preparation only');
+  const pendulum = state.pendulum?.x === x && state.pendulum?.y === y ? state.pendulum : null;
+  const target = pendulum ?? structureAt(state, x, y);
+  if (!target || target.type === 'keep') return failure('Choose a player structure');
+  if (!pendulum && (target.type === 'wall' || target.type === 'gate')) {
+    if (state.structures.some(s => !s.destroyed && s.type === 'tower' && tileAt(s.x, s.y) !== 'C' && supported(state, s) &&
+      !supported(state, s, target.id))) return failure('Would leave a canyon tower unsupported');
+  }
+  const health = pendulum ? 1 : target.hp / target.maxHp;
+  const refund = Math.round(target.cost * CONFIG.refundRate * health);
+  if (pendulum) state.pendulum = null;
+  else state.structures.splice(state.structures.indexOf(target), 1);
+  state.gold += refund;
+  if (target.type === 'house') homeInhabitants(state);
+  state.flowRevision = (state.flowRevision ?? 0) + 1;
+  emit(state, 'demolish', { structureId: target.id, x, y, refund });
+  return { ok: true, valid: true, reason: '', refund };
+}
+
+export function repairCost(structure) {
+  if (!structure || structure.destroyed || structure.hp <= 0) return 0;
+  return Math.ceil(structure.cost * CONFIG.repairRate * (structure.maxHp - structure.hp) / structure.maxHp);
+}
+
+export function repair(state, x, y) {
+  if (state.phase !== 'prep') return failure('Repair during preparation only');
+  const target = structureAt(state, x, y);
+  if (!target) return failure('Choose a damaged structure');
+  const cost = repairCost(target);
+  if (state.gold < cost) return failure('Not enough gold', cost);
+  state.gold -= cost;
+  target.hp = target.maxHp;
+  return { ok: true, valid: true, reason: '', cost };
+}
+
+export function repairAll(state) {
+  if (state.phase !== 'prep') return failure('Repair during preparation only');
+  const cost = state.structures.reduce((n, s) => n + repairCost(s), 0);
+  if (state.gold < cost) return failure('Not enough gold', cost);
+  state.gold -= cost;
+  for (const s of state.structures) if (!s.destroyed && s.hp > 0) s.hp = s.maxHp;
+  return { ok: true, valid: true, reason: '', cost };
+}
+
+export function capacity(state) {
+  return state.structures.reduce((totals, s) => {
+    if (!s.destroyed && s.hp > 0) {
+      totals.housing += CONFIG.structures[s.type]?.housing ?? 0;
+      totals.food += CONFIG.structures[s.type]?.food ?? 0;
+    }
+    return totals;
+  }, { housing: 0, food: 0 });
+}
+
+export function canStart(state) {
+  const { housing, food } = capacity(state);
+  const population = state.population ?? CONFIG.population;
+  if (state.phase !== 'prep') return failure('Finish the current siege first');
+  const shortages = [];
+  if (housing < population) {
+    const houses = Math.ceil((population - housing) / CONFIG.structures.house.housing);
+    shortages.push(`Need ${houses} more ${houses === 1 ? 'house' : 'houses'}`);
+  }
+  if (food < population) shortages.push(`Need ${population - food} more food capacity`);
+  if (shortages.length) return failure(shortages.join(' · '));
+  return { ok: true, valid: true, reason: '' };
+}

@@ -103,7 +103,7 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
 | House | 80 | 120 | 2×2 | +4 housing |
 | Farm | 70 | 100 | 2×2 | +6 food |
 | Titan's Pendulum | 400 | — | site | one only, on a site; not attackable |
-| Keep (pre-placed) | — | 1500 | 3×3 | goal; housing 6, food 6; not demolishable |
+| Keep (pre-placed) | — | 2000 | 3×3 | goal; housing 6, food 6; not demolishable |
 
 Rules:
 - Floor tiles (`.`/`C`) only; no overlap with cliffs, ledges, keep, other
@@ -141,7 +141,7 @@ Rules:
 | Foot soldier | 40 | 1.6 | 8 | 10 | pillages houses/farms within 1.5 tiles of its route |
 | Chiseler | 50 | 1.3 | 24 | 4 | visible chisel, chipping animation + chip particles |
 | Powder carrier | 18 | 1.5 | 6 | 6 | explodes on death |
-| Giant boss | 1500 / 2300 / 3200 | 0.55 | — | 40 | 1.4 s visible windup, slam 260 to structures in 1.6-tile radius |
+| Giant boss | 1200 / 1700 / 2000 | 0.55 | — | 40 | 1.4 s visible windup, slam 260 to structures in 1.6-tile radius |
 
 **Pathing — breach-cost flow field.** One Dijkstra flow field toward the keep
 over 4-/8-connected tiles (no corner cutting past cliffs). Tile cost: floor 1,
@@ -218,10 +218,10 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 - Target length ≈ 3–4 min at 1×. Buildup → escalating groups → boss at ~70–80%
   of the timeline with an on-screen "THE BRUTE APPROACHES" banner and horn.
   No empty stretches > 12 s (fast-forward exists anyway).
-  - S1 "The First Assault": ~45 enemies, few powder carriers, boss 1500.
-  - S2 "The Growing Threat": ~75, more chiselers + clustered powder groups, boss 2300.
+  - S1 "The First Assault": ~45 enemies, few powder carriers, boss 1200.
+  - S2 "The Growing Threat": ~75, more chiselers + clustered powder groups, boss 1700.
   - S3 "The Great Siege": ~120, dense waves, powder carriers mixed into chiseler
-    packs, two-pronged timing (big group arrives while previous is at walls), boss 3200.
+    packs, two-pronged timing (big group arrives while previous is at walls), boss 2000.
 - End: **victory** when schedule exhausted and all enemies (incl. boss) dead;
   **defeat** when the keep is destroyed or every inhabitant is dead.
 - Breaches matter through rewards; a breach alone is not defeat.
@@ -238,7 +238,7 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
   applied on leaving the results screen of a *victory* via "Continue", and the
   campaign records siege index so rewards can't be applied twice. Restart
   Campaign returns to the initial state.
-- Rewards (victory only): completion 300 / 350 / 400; all inhabitants alive +100;
+- Rewards (victory only): completion 300 / 450 / 400; all inhabitants alive +100;
   no enemy reached the keep +75; boss defeated +100 (always true on victory but
   shown); structural damage < 15% of total structure HP +50; spent < 70% of
   pre-siege gold +50.
