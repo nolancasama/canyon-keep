@@ -1,0 +1,4 @@
+node_modules/
+.ai/
+.tmp/
+.claude/checkpoint/
