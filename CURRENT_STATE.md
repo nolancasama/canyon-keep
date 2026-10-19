@@ -14,7 +14,9 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
 - Whole-map Canvas2D castle engineering on the unchanged controller canyon,
   with trade roads, gates, integrated towers, repairs, rubble and attack markers.
 - Three scripted sieges with population 6/10/14, mandatory housing/food capacity,
-  exact shortage messages and disabled Start Siege when capacity is insufficient.
+  conditional-free houses/farms while capacity is short, and disabled Start Siege
+  until housing, food and the trade road are ready. Preparation construction may
+  seal the canyon; the road is checked at Start Siege instead of placement.
   Six inhabitants live at the keep and four per house thereafter; civilians
   idle at their homes and flee to shelter. Foot soldiers pillage nearby farms
   and houses until destroyed; destroyed buildings cease supplying capacity.
@@ -31,6 +33,15 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
   brighter lips and deep shading. Clear amber strike bands follow the same
   visual contour; orange intersections warn of friendly structure damage.
 - Battle HUD, pause, 1×/2×/4× playback, procedural audio and mute.
+- Preparation demolition returns the amount actually paid, scaled by remaining
+  HP (100% intact, zero for destroyed/free structures). Repair prices retain
+  their original base-cost calculation. The Gate tool atomically replaces a
+  living wall for gate price minus its HP-scaled refund; only the net cost is
+  required, and adjacent towers remain supported.
+- The always-visible Start Siege advisory lists every unmet requirement or all
+  three successful checks and readiness. Blocked-road hints pulse on bordering
+  walls/barricades; previews, palette and tooltips display FREE infrastructure
+  when needed and the wall-to-gate net replacement price.
 
 ## Debug / Harness Surface
 `window.__game.state` is a live getter; UI/render code observes it without
@@ -48,15 +59,25 @@ mutation. `api.phase()` retains its phase-string interface. Campaign observation
 Actions include `place`, `placeLine`, `demolish`, `repair`, `repairAll`,
 `startSiege`, `triggerPendulum`, `setSpeed`, `stepSeconds`, `tick`,
 `continueCampaign`, `retrySiege`, `restartCampaign`, previews and capacity checks.
+`place('gate', x, y)` replaces a living wall atomically. `readiness()` returns
+the shared housing/food/tradeRoad requirement list with `ok` and `message` for
+each; `canStart()` and `startSiege()` use that same list. `price(type)` returns
+the next placement price, and `blockedRoadTiles()` exposes map hint tiles.
+Structures expose actual `paidCost` separately from base `cost` for refunds.
+These observations preserve the read-only harness surface; campaign phases and
+retry/restart semantics are unchanged.
 `stepSeconds` advances simulation independent of playback speed. Retry restores
 the exact full preparation snapshot, including RNG and pending campaign history.
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
-`npm test`: **34 passed, 0 failed**, including the affordable no-pendulum
+`npm test`: **45 passed, 0 failed**, including preparation pricing, refunds,
+seeded value conservation, atomic gate replacement and shared readiness, plus the affordable no-pendulum
 campaign reference winning all three sieges deterministically (S3 keep ends at
 180/2000), and the unchanged Siege 1 castle losing Siege 3. Siege lengths at 1×:
 ~3.6 / 4.1 / 4.5 min.
+Preparation UI sizing and map hints have not been browser-captured; controller
+acceptance remains pending.
 
 ## Known Issues / Next Steps
 - Not yet play-tested by a human; balance comes from headless reference runs.

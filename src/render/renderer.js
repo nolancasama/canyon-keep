@@ -33,6 +33,11 @@ export class Renderer {
     this.overlays(c,state,ui);
     for(const s of state.structures||[])if(!s.destroyed&&s.hp>0)this.structure(c,s,state);
     this.sweepWarnings(c,state,ui);
+    if(state.phase==='prep'){
+      c.save();c.strokeStyle=`rgba(240,96,78,${.7+Math.sin(this.visualTime*4)*.3})`;c.fillStyle=`rgba(240,96,78,${.18+Math.sin(this.visualTime*4)*.1})`;c.lineWidth=3;for(const tile of ui.blockedRoadTiles||[])c.fillRect(tile.x*TILE,tile.y*TILE,TILE,TILE);
+      for(const tile of ui.blockedRoadTiles||[])c.strokeRect(tile.x*TILE+1,tile.y*TILE+1,TILE-2,TILE-2);
+      c.restore();
+    }
     for(const h of state.inhabitants||[])if(h.hp>0&&!h.sheltered)this.inhabitant(c,h,state);
     for(const e of [...(state.enemies||[])].filter(e=>e.hp>0&&!e.dead).sort((a,b)=>a.y-b.y))this.enemy(c,e,state);
     for(const a of state.arrows||[]){const target=state.enemies.find(e=>e.id===a.targetId);const angle=target?Math.atan2(target.y-a.y,target.x-a.x):0;c.save();c.translate(a.x*TILE,a.y*TILE);c.rotate(angle);line(c,-7,0,4,0,'#f1dfa5',1.5);line(c,4,0,1,-2,'#f1dfa5');c.restore();}

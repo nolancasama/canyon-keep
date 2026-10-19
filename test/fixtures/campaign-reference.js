@@ -1,5 +1,6 @@
-// Only public preparation actions spend money. No free structures, healing,
-// treasury injections, or pendulum triggers are used by the campaign plan.
+// Only public preparation actions spend money, including conditionally free
+// required houses/farms. No injected structures, healing, treasury injections,
+// or pendulum triggers are used by the campaign plan.
 // The shorter outer curtain buys six towers initially instead of the accepted
 // four-tower basin reference's longer curtain. Cost: 960 gold.
 export const CAMPAIGN_INITIAL_BUILD = [

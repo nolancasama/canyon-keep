@@ -12,7 +12,7 @@ export const CONFIG = {
     keepHpPerGold: 10, civilianBuildingLost: 15, floor: 250 },
   seed: 274139,
   spawnSafeColumns: 3,
-  refundRate: 0.75,
+  refundRate: 1.0,
   repairRate: 0.5,
   breachCostPerHp: 0.08,
   floorMovementCost: 1,

@@ -203,3 +203,45 @@ with amendments, as `SPEC.md` (the authoritative spec). Key decisions:
   more food capacity") instead of only the first.
 - **Results screen uses a two-column breakdown** so all line items and the
   Continue button fit a ~860px-tall window without inner scrolling.
+
+## 2026-10-19 — Preparation sandbox rules (user brief, amended)
+
+Accepted from the user's "Preparation Phase Improvements" brief: 100% refund of
+intact structures in prep (scaled by remaining HP; destroyed = 0), trade-road
+check moved from placement to Start Siege, Gate tool replaces a Wall atomically
+for the net cost, and a always-visible requirements advisory under Start Siege.
+
+Amendment by the design lead:
+- **Houses/farms are free only while needed.** A house is free while intact
+  housing (keep + houses) < population; a farm is free while intact food <
+  population. Surplus ones cost the old price (80/70). Each structure stores
+  what was actually paid; demolish refunds that (free → 0). Why: unconditionally
+  free 2×2 blocking buildings would be free walls (sealing the canyon for 0 gold).
+  This keeps the brief's intent — mandatory civilian infrastructure never costs
+  gold — without the exploit. Rejected: free and non-blocking (changes battle
+  pathing, which the brief forbids); a hard count cap (opaque to players).
+- **Blocked-road hint:** when the road is blocked, wall/barricade tiles bordering
+  the region reachable from the entrance get a red highlight in prep. One flood
+  fill, no new path visualisation.
+- Refund-exploit check: demolish+rebuild of a damaged piece costs cost×(1−f)
+  while repair costs 0.5×cost×(1−f), so full refunds can't launder repairs.
+
+## 2026-10-19 — Preparation sandbox implementation contract
+
+- **Actual payment is separate from base price.** Structures store `paidCost`
+  for refunds while retaining base `cost` for unchanged repair pricing. The
+  placement-time house/farm price depends on current intact capacity, so a free
+  building never gains refund value when population or other buildings change.
+- **Gate replacement uses the existing placement action.** Calling
+  `place('gate', x, y)` on a living wall performs one atomic replacement; there
+  is no demolition step that could strand a canyon tower or require the full
+  gate price up front. The new gate records the full gate purchase price and
+  the removed wall contributes its recoverable value to the exchange. This
+  conserves gold plus recoverable construction value for intact structures.
+- **Readiness and map hints belong to the simulation.** `readiness()` exposes
+  all housing, food and tradeRoad requirements; both Start Siege actions and
+  the advisory consume that shared result. `price(type)` supplies dynamic next
+  prices, and `blockedRoadTiles()` supplies only wall/barricade boundary tiles
+  for the amended map hint. Presentation does not duplicate path checks or
+  capacity-to-shortage calculations. This gives the harness semantic read-only
+  observations without altering campaign phases or battle pathing.

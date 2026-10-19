@@ -32,6 +32,7 @@ procedural maps, ladders/tunneling/flanking AI, building during battle).
   per-swing hit sets may use arrays of ids). `structuredClone` snapshots must work.
 - Debug/acceptance surface: `window.__game` exposes `{ state, api }` where `api`
   has `place(type,x,y)`, `placeLine(type,x0,y0,x1,y1)`, `demolish(x,y)`,
+  `canStart()`, `readiness()`, `price(type)`, `blockedRoadTiles()`,
   `startSiege()`, `triggerPendulum()`, `setSpeed(n)`, `stepSeconds(s)` (runs sim
   synchronously), `retrySiege()`, `restartCampaign()`, `phase()`.
 
@@ -100,35 +101,49 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
 | Gate | 60 | 180 | 1×1 | blocks enemies; **counts as open for the trade-road check** |
 | Barricade | 8 | 70 | 1×1 | cheap forward obstacle |
 | Archer tower | 120 | 250 | 1×1 | range 6.5 tiles, 12 dmg, 1.0 shot/s, arrows are visible projectiles |
-| House | 80 | 120 | 2×2 | +4 housing |
-| Farm | 70 | 100 | 2×2 | +6 food |
+| House | 0 while needed, else 80 | 120 | 2×2 | +4 housing |
+| Farm | 0 while needed, else 70 | 100 | 2×2 | +6 food |
 | Titan's Pendulum | 400 | — | site | one only, on a site; not attackable |
 | Keep (pre-placed) | — | 2000 | 3×3 | goal; housing 6, food 6; not demolishable |
 
 Rules:
+- House/farm prices are computed when placed: a house is FREE while intact
+  housing (keep + living houses) is below population; a farm is FREE while
+  intact food is below population. Otherwise their normal prices are 80/70.
+  Each placed structure records `paidCost`, the amount actually paid. The next
+  price appears in previews, palette and tooltips; defensive costs are unchanged.
 - Floor tiles (`.`/`C`) only; no overlap with cliffs, ledges, keep, other
   structures, or the spawn column + 2 tiles in front of it.
 - **Towers**: anywhere in the castle zone (`C`), or on canyon floor only if
   **orthogonally adjacent to a wall or gate** ("integrated into the castle").
   Demolishing a wall that would leave a canyon tower unsupported is refused
   with a reason.
-- **Trade-road rule (new, gives gates a purpose):** at all times during
-  preparation, a 4-connected path must exist from the keep to the spawn edge
-  through floor/ledge/**gate** tiles. Any placement that would break it is
-  invalid (red preview, tooltip "Blocks the trade road — add a gate").
-  Enemies treat gates as solid. Gates are expensive and weaker than walls, so
-  every sealed line has a natural weak point.
+- **Trade-road rule:** preparation construction may seal the canyon or enclose
+  the keep. Start Siege requires a 4-connected route from the spawn edge to
+  the keep over floor/ledge/**gate** tiles, blocked by walls, barricades,
+  towers, houses, farms and cliffs. Terrain, overlap, footprint, tower support,
+  spawn safety and gold checks still apply to placement. Enemies treat gates
+  as solid; their pathing is unchanged.
+- Using `place('gate', x, y)` on a living wall replaces it atomically with a
+  full-HP gate, including inside a sealed line. The net cost is gate price
+  minus the wall's HP-scaled refund; only that net amount must be affordable.
+  Failure leaves the state unchanged. The gate records its full purchase price,
+  preserves adjacent tower support, and updates occupancy, flow field and wall
+  connections. Other occupied tiles remain invalid. Single-click replacement
+  is sufficient; dragging replacements along a wall is not required.
 - Left-click places; drag with wall/barricade/gate places a 4-connected line
   (L-shaped: horizontal then vertical leg); preview shows each tile green/red
   and the total cost; on release place every valid tile in order until gold
   runs out. Right-click or Esc cancels tool. Hotkeys: 1 Wall, 2 Gate,
   3 Barricade, 4 Tower, 5 House, 6 Farm, 7 Pendulum, X Demolish, Space pendulum
   (siege), P pause, F speed cycle.
-- Demolish during prep: refund `round(cost × 0.75 × hp/maxHp)`.
+- Demolish during prep: refund `round(paidCost × hp/maxHp)` (refund rate 1.0).
+  Destroyed structures/rubble refund zero; free buildings refund zero and can
+  be moved at no gold cost while needed. Tower-support restrictions still apply.
 - Repair (prep only): button "Repair all" + click-repair with the demolish-style
   tool; cost `ceil(cost × 0.5 × missingHp/maxHp)`. Destroyed structures leave
   rubble markers in prep (shows where breaches happened) and can be rebuilt at
-  full price.
+  the current placement price.
 - No construction during siege.
 - Hover/selection shows tower range circle; selecting the pendulum tool shows
   all 3 sites with their full sweep zones; a placed pendulum always shows its
@@ -178,7 +193,7 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 ## 6. Titan's Pendulum (`src/sim/pendulum.js`) — the centerpiece
 
 - One per campaign, bought on one of 3 sites (cost 400). Can be demolished in
-  prep for the normal 75% refund and moved.
+  prep for the normal full refund and moved.
 - Top-down reading: a massive gantry tower on the cliff at the pivot, a long
   chained arm, and an enormous spiked stone/iron hammer head (≈2.2-tile radius)
   that sweeps an arc across the canyon floor. A winding drum with a ratchet
@@ -231,8 +246,14 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 - Start 1000 gold, population 6, keep gives housing 6 and food 6.
 - Population before siege 1/2/3: 6 / 10 / 14 (fixed table; losses cost gold,
   not population — keeps the schedule deterministic).
-- **Start Siege disabled** unless housing ≥ population and food ≥ population;
-  HUD shows exact shortage ("Need 1 more house").
+- **Start Siege disabled** unless housing ≥ population, food ≥ population and
+  the trade road is open. A single simulation readiness function supplies every
+  requirement as `{ id, ok, message }` to `canStart()`, `startSiege()` and the UI.
+  `api.readiness()` exposes the full housing, food and tradeRoad requirement
+  list read-only. Shortage messages are "Build N additional house(s)." and
+  "Build N additional farm(s).", rounded up by each building's capacity. The
+  blocked-road message is "Castle entrance blocked. Install a gate to create a
+  route to the keep." All requirements must pass before a snapshot is taken.
 - Snapshot taken at Start Siege (full prep state incl. gold, structures, HP,
   pendulum, RNG seed). **Retry Siege** restores it exactly; rewards are only
   applied on leaving the results screen of a *victory* via "Continue", and the
@@ -244,8 +265,8 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
   pre-siege gold +50.
 - Penalties: −40 per inhabitant killed; −50 once if `keepReached`; −1 per 10 keep
   HP lost; −15 per house/farm destroyed.
-- Payout floor: net payout never below 250 (guarantees mandatory houses/farms are
-  affordable — no soft lock).
+- Payout floor: net payout never below 250. Mandatory houses/farms are free
+  while needed, independent of the treasury.
 - Defeat: results show the same breakdown, payout 0, buttons Retry Siege /
   Restart Campaign. After S3 victory: campaign-complete screen with totals.
 - Results screen lists: result, enemies defeated, boss defeated, inhabitants
@@ -258,7 +279,21 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 
 - Prep (top bar + left build palette): gold, population, housing x/y, food x/y
   (red when short), selected tool + cost, hovered placement reason when invalid,
-  Repair all (cost shown), Start Siege (disabled with reason), siege number/name.
+  Repair all (cost shown), Start Siege (disabled until ready), siege number/name.
+- An always-visible advisory directly under Start Siege shows "Cannot start
+  siege:" and every unmet requirement in a warning colour, or three checkmarked
+  lines ("Housing sufficient", "Food sufficient", "Castle entrance accessible")
+  followed by "Ready for battle!". It updates after every build, demolition and
+  replacement, and fits without scrolling at 1366×768 and 1440×860. Housing and
+  food indicators remain in the HUD. When blocked, the advisory also explains
+  replacing a wall with a gate.
+- During prep with a blocked trade road, wall/barricade tiles orthogonally
+  bordering the spawn-reachable region receive a subtle pulsing red outline.
+  No other path visualisation is shown. The sim supplies these hint tiles via
+  `api.blockedRoadTiles()`; the UI does not implement readiness checks.
+- Gate-on-wall preview reads "Replace Wall -> Gate | Cost: N G", green when
+  affordable and red otherwise. Infrastructure previews/palette/tooltips show
+  FREE when the next house/farm is needed and its normal price otherwise.
 - Battle: siege name + progress bar (schedule time), inhabitants remaining,
   keep HP bar, boss HP bar (when present), pendulum status widget (READY pulsing /
   recharge ring with seconds) with key hint, pause + 1×/2×/4× buttons.
@@ -274,11 +309,15 @@ toggle (M). Audio must start only after a user gesture and never throw.
 ## 12. Tests (`node --test test/`)
 
 At minimum: placement validity (terrain, overlap, tower-adjacency rule,
-trade-road rule incl. gate exception), line placement stops at gold, refund and
+sealed construction allowed but Start Siege requires a gate-accessible trade
+road), line placement stops at gold, paid-cost/HP-scaled full refund and
 repair math, flow field never routes through cliffs and prefers weaker walls,
 enemies breach a wall and continue, explosion single-detonation + chain + 6-tile
 structure cap, pendulum hit-once-per-swing + cooldown + boss survives one hit,
-capacity checks + Start Siege gating, reward/penalty math incl. `keepReached`
+conditional-free infrastructure, seeded construction/refund conservation,
+atomic wall-to-gate replacement (net affordability, no mutation on failure,
+support and flow updates), readiness list + Start Siege gating,
+reward/penalty math incl. `keepReached`
 counted once and payout floor, snapshot retry restores exact state and does not
 duplicate rewards, determinism (two runs of S1 with same build → identical
 event-log hash), headless full S1 run with a reasonable reference build ends in

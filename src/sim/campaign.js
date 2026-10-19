@@ -74,6 +74,9 @@ export function createGame(seed = CONFIG.seed) {
     preview: (type, x, y) => build.placement(state, type, x, y),
     previewLine: (type, x0, y0, x1, y1) => build.previewLine(state, type, x0, y0, x1, y1),
     capacity: () => build.capacity(state),
+    price: type => build.price(state, type),
+    readiness: () => build.readiness(state),
+    blockedRoadTiles: () => build.blockedRoadTiles(state),
     canStart: () => build.canStart(state),
     startSiege() {
       const check = build.canStart(state);
