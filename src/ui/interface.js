@@ -5,7 +5,10 @@ import { siegeName } from '../sim/siege.js';
 const tools=[['wall','Wall','▥','1'],['gate','Gate','╫','2'],['barricade','Barricade','╳','3'],['tower','Archer tower','♜','4'],['house','House','⌂','5'],['farm','Farm','≋','6'],['pendulum',"Titan’s Pendulum",'⚒','7'],['demolish','Demolish','×','X'],['repair','Repair','+','']];
 const lineTools=['wall','gate','barricade'];
 const escapeText=value=>String(value).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-const html=(el,value)=>{if(el.innerHTML!==value)el.innerHTML=value;};
+// Compare with the last string written, not el.innerHTML: the browser re-serializes
+// attributes (disabled -> disabled=""), so that comparison never matched and the
+// buttons were rebuilt every refresh, dropping hover state and clicks.
+const html=(el,value)=>{if(el._html!==value){el._html=value;el.innerHTML=value;}};
 function findStructure(state,x,y){return state.structures.find(s=>!s.destroyed&&s.hp>0&&x>=s.x&&x<s.x+(s.w||1)&&y>=s.y&&y<s.y+(s.h||1));}
 
 export class Interface {
