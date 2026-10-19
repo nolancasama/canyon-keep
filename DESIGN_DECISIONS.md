@@ -257,3 +257,13 @@ Amendment by the design lead:
   the old piece's HP-scaled refund (Gate→Wall on an intact gate returns 40 G).
   Swapping a damaged gate equals demolish + build, which is already allowed, so
   no repair exploit. Gate-tool drags over walls also swap (symmetry).
+
+## 2026-10-19 — Houses and farms: always free, only buildable when needed (user decision)
+
+Replaces "free while needed, surplus priced 80/70". The user found surplus
+pricing confusing (in Siege 1 the keep covers 6 people, so every house cost
+gold). Now houses/farms always cost 0 and the tool is locked (greyed, "NOT
+NEEDED") unless housing/food is short of the population. Still prevents free
+2×2 blockers being spammed as walls, since you can only build as many as the
+population requires. Moving one is free: demolish (refund 0) re-opens the need.
+Rejected: always free anywhere (free walls), always free but basin-only.

@@ -104,11 +104,11 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
 | Keep (pre-placed) | — | 2000 | 3×3 | goal; housing 6, food 6; not demolishable |
 
 Rules:
-- House/farm prices are computed when placed: a house is FREE while intact
-  housing (keep + living houses) is below population; a farm is FREE while
-  intact food is below population. Otherwise their normal prices are 80/70.
-  Each placed structure records `paidCost`, the amount actually paid. The next
-  price appears in previews, palette and tooltips; defensive costs are unchanged.
+- Houses and farms are always FREE (`paidCost` 0) but can only be built while
+  needed: a house while intact housing (keep + living houses) is below
+  population, a farm while intact food is below population. Otherwise the tool
+  is locked and greyed in the palette ("NOT NEEDED"). Their config cost (80/70)
+  is only used for repair pricing. Defensive costs are unchanged.
 - Floor tiles (`.`/`C`) only; no overlap with cliffs, keep, other
   structures, or the spawn column + 2 tiles in front of it.
 - **Towers**: anywhere in the castle zone (`C`), or on canyon floor only if
@@ -292,7 +292,7 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 - Wall/gate swap previews read "Replace Wall -> Gate | Cost: N G" or
   "Replace Gate -> Wall | Refund: N G" (or `Cost` for a positive net), green
   when affordable and red otherwise. Infrastructure previews/palette/tooltips
-  show FREE when the next house/farm is needed and its normal price otherwise.
+  show FREE when a house/farm is needed and NOT NEEDED (locked) otherwise.
 - Battle: siege name + progress bar (schedule time), inhabitants remaining,
   keep HP bar, boss HP bar (when present), pendulum status widget (READY pulsing /
   recharge ring with seconds) with key hint, pause + 1×/2×/4× buttons.

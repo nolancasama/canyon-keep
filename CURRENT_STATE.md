@@ -41,8 +41,8 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
   only a positive net cost is required, and adjacent towers remain supported.
 - The always-visible Start Siege advisory lists every unmet requirement or all
   three successful checks and readiness. Blocked-road hints pulse on bordering
-  walls/barricades; previews, palette and tooltips display FREE infrastructure
-  when needed and wall/gate net replacement prices.
+  walls/barricades; houses/farms are always free and only selectable
+  while needed (palette shows NOT NEEDED otherwise); previews show and wall/gate net replacement prices.
 
 ## Debug / Harness Surface
 `window.__game.state` is a live getter; UI/render code observes it without

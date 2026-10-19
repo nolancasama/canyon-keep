@@ -54,11 +54,17 @@ export function blockedRoadTiles(state) {
 export function price(state, type) {
   const def = CONFIG.structures[type];
   if (!def) return 0;
-  if (type === 'house' || type === 'farm') {
-    const totals = capacity(state), population = state.population ?? CONFIG.population;
-    if (type === 'house' && totals.housing < population || type === 'farm' && totals.food < population) return 0;
-  }
+  // Houses and farms are free settlement requirements (see DESIGN_DECISIONS).
+  if (type === 'house' || type === 'farm') return 0;
   return def.cost;
+}
+
+// Houses and farms may only be built while the population still needs them.
+export function civilianNeeded(state, type) {
+  const totals = capacity(state), population = state.population ?? CONFIG.population;
+  if (type === 'house') return totals.housing < population;
+  if (type === 'farm') return totals.food < population;
+  return true;
 }
 
 export function refundValue(structure) {
@@ -73,6 +79,7 @@ export function placement(state, type, x, y, { line = false } = {}) {
   const cost = price(state, type);
   if (state.phase !== 'prep') return failure('Construction is available during preparation', cost);
   if (!Number.isInteger(x) || !Number.isInteger(y)) return failure('Choose a map tile', cost);
+  if (!civilianNeeded(state, type)) return failure(type === 'house' ? 'Housing is sufficient; no house needed' : 'Food is sufficient; no farm needed', cost);
   const existing = structureAt(state, x, y);
   const interchangeable = (type === 'gate' && existing?.type === 'wall') ||
     (type === 'wall' && existing?.type === 'gate');

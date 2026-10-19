@@ -75,6 +75,7 @@ export function createGame(seed = CONFIG.seed) {
     previewLine: (type, x0, y0, x1, y1) => build.previewLine(state, type, x0, y0, x1, y1),
     capacity: () => build.capacity(state),
     price: type => build.price(state, type),
+    civilianNeeded: type => build.civilianNeeded(state, type),
     readiness: () => build.readiness(state),
     blockedRoadTiles: () => build.blockedRoadTiles(state),
     canStart: () => build.canStart(state),

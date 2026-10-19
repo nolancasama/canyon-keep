@@ -41,6 +41,7 @@ test('exact capacity shortages gate starting; homes track four inhabitants per h
   assert.equal(game.api.place('house',homes[0].x,homes[0].y).ok,true);
   assert.equal(game.api.canStart().ok,true);
   const canyon=createGame();
+  canyon.state.population=10;
   assert.equal(canyon.api.place('house',6,7).ok,true);
   assert.equal(canyon.api.place('farm',11,6).ok,true);
 });

@@ -59,6 +59,7 @@ test('line previews simulate sequential spending and release stops at available 
 test('an already blocked road does not prohibit any ordinary construction tool', () => {
   for (const type of ['wall', 'barricade', 'tower', 'house', 'farm']) {
     const game = createGame();
+    game.state.population = 14;
     for (const {x,y} of crossing(5)) assert.equal(game.api.place('wall', x, y).ok, true);
     assert.equal(game.api.readiness().find(r => r.id === 'tradeRoad').ok, false);
     assert.equal(game.api.preview(type, 52, 10).valid, true);
@@ -85,30 +86,36 @@ test('damaged demolition refunds and prep repairs use specified rounding', () =>
   assert.equal(game.state.gold, before + refund);
 });
 
-test('needed houses and farms are free at placement, while surplus buildings retain normal prices', () => {
+test('houses and farms are always free and can only be built while the population needs them', () => {
   const game = createGame();
+  assert.equal(game.api.civilianNeeded('house'), false);
+  assert.equal(game.api.civilianNeeded('farm'), false);
+  assert.match(game.api.preview('house', 52, 10).reason, /no house needed/);
+  assert.match(game.api.preview('farm', 52, 13).reason, /no farm needed/);
+  assert.equal(game.api.place('house', 52, 10).ok, false);
   game.state.population = 14;
-  for (const [type, locations, price, finalCapacity] of [
-    ['house', [[52,10], [55,10], [58,10]], 80, 18],
-    ['farm', [[52,13], [55,13], [58,13]], 70, 24],
+  for (const [type, locations, finalCapacity] of [
+    ['house', [[52,10], [55,10]], 14],
+    ['farm', [[52,13], [55,13]], 18],
   ]) {
     const initialGold = game.state.gold;
-    for (const [index, [x, y]] of locations.entries()) {
-      const expected = index < 2 ? 0 : price;
-      assert.equal(game.api.price(type), expected);
-      assert.equal(game.api.preview(type, x, y).cost, expected);
+    for (const [x, y] of locations) {
+      assert.equal(game.api.price(type), 0);
+      assert.equal(game.api.civilianNeeded(type), true);
       const result = game.api.place(type, x, y);
       assert.equal(result.ok, true);
-      assert.equal(result.structure.paidCost, expected);
+      assert.equal(result.structure.paidCost, 0);
       assert.equal(result.structure.cost, CONFIG.structures[type].cost, 'repair retains base price');
     }
-    assert.equal(game.state.gold, initialGold - price);
+    assert.equal(game.api.civilianNeeded(type), false);
+    assert.equal(game.api.place(type, 58, type === 'house' ? 10 : 13).ok, false, 'surplus is not buildable');
+    assert.equal(game.state.gold, initialGold);
     assert.equal(game.api.capacity()[type === 'house' ? 'housing' : 'food'], finalCapacity);
   }
   assert.equal(game.api.canStart().ok, true);
 });
 
-test('damaged civilian buildings still provide capacity; destroyed ones become free to replace', () => {
+test('damaged civilian buildings still provide capacity; destroyed ones can be replaced for free', () => {
   for (const type of ['house', 'farm']) {
     const game = createGame();
     game.state.population = 10;
@@ -116,10 +123,10 @@ test('damaged civilian buildings still provide capacity; destroyed ones become f
     assert.equal(result.ok, true);
     const building = result.structure;
     building.hp = 1;
-    assert.equal(game.api.price(type), CONFIG.structures[type].cost);
+    assert.equal(game.api.civilianNeeded(type), false);
     assert.equal(repairCost(building), Math.ceil(building.cost * CONFIG.repairRate * (building.maxHp - 1) / building.maxHp));
     damageStructure(game.state, building, 1);
-    assert.equal(game.api.price(type), 0);
+    assert.equal(game.api.civilianNeeded(type), true);
     assert.equal(game.api.capacity()[type === 'house' ? 'housing' : 'food'], 6);
     assert.equal(game.api.canStart().ok, false);
     assert.equal(game.api.place(type, 52, 10).structure.paidCost, 0);
