@@ -16,7 +16,6 @@ export const CONFIG = {
   repairRate: 0.5,
   breachCostPerHp: 0.08,
   floorMovementCost: 1,
-  ledgeMovementCost: 1.5,
   structures: {
     wall: { cost: 20, hp: 200, w: 1, h: 1 },
     gate: { cost: 60, hp: 180, w: 1, h: 1 },

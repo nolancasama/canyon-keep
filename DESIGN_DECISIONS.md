@@ -245,3 +245,15 @@ Amendment by the design lead:
   for the amended map hint. Presentation does not duplicate path checks or
   capacity-to-shortage calculations. This gives the harness semantic read-only
   observations without altering campaign phases or battle pathing.
+
+## 2026-10-19 — Ledges removed; walls and gates interchangeable in prep (user brief)
+
+- **Rocky ledges (`,`) become plain buildable floor.** The ledges existed to stop
+  the throat being trivially sealed. Since the trade road is now enforced at
+  Start Siege, a sealed choke still needs a gate, which enemies target as its
+  weakest point, so the choke is a strong option rather than an automatic win.
+  Side effect accepted: those tiles lose their 1.5 movement cost (now 1).
+- **Wall ↔ Gate swaps** in prep, single click or drag, atomic: new cost minus
+  the old piece's HP-scaled refund (Gate→Wall on an intact gate returns 40 G).
+  Swapping a damaged gate equals demolish + build, which is already allowed, so
+  no repair exploit. Gate-tool drags over walls also swap (symmetry).

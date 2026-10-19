@@ -5,7 +5,7 @@ export function inBounds(x, y) {
 }
 
 export function tileAt(x, y) { return inBounds(x, y) ? MAP[y][x] : '#'; }
-export function isWalkable(x, y) { return '.,CKS'.includes(tileAt(x, y)); }
+export function isWalkable(x, y) { return '.CKS'.includes(tileAt(x, y)); }
 
 export function structureAt(state, x, y) {
   return state.structures.find(s => !s.destroyed && s.hp > 0 && x >= s.x && y >= s.y &&

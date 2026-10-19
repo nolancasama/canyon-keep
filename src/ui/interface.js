@@ -12,7 +12,7 @@ export class Interface {
   constructor(game,canvas,audio){
     this.game=game;this.canvas=canvas;this.audio=audio;this.tool='wall';this.hover=null;this.drag=null;this.previewCells=[];this.message='';this.messageUntil=0;this.inspected=false;this.lastPhase='';this.previousSpeed=1;this.refreshClock=0;
     this.el=Object.fromEntries(['resources','palette','actions','battle-stats','status','phase-label','clock','results','announcement','mute'].map(id=>[id,document.getElementById(id)]));
-    this.el.palette.innerHTML='<h2>CONSTRUCTION</h2>'+tools.map(([type,name,icon,key],i)=>`${i===7?'<div class="palette-separator"></div>':''}<button class="tool" data-tool="${type}" title="${name}${key?' ('+key+')':''}" aria-pressed="false"><span class="tool-icon" aria-hidden="true">${icon}</span><span class="tool-name">${name}<small>${CONFIG.structures[type]?CONFIG.structures[type].cost+' GOLD':type==='demolish'?'100% × HP REFUND':'CLICK TO REPAIR'}</small></span>${key?'<kbd>'+key+'</kbd>':''}</button>`).join('')+'<p class="palette-note">Build a fortress, not a road.<br><br>Drag walls to draw a line.<br>Replace a wall with a <span style="color:var(--gold)">gate</span> before starting siege.<br><br>Cliff-mounted Titans damage your structures in their sweep.</p>';
+    this.el.palette.innerHTML='<h2>CONSTRUCTION</h2>'+tools.map(([type,name,icon,key],i)=>`${i===7?'<div class="palette-separator"></div>':''}<button class="tool" data-tool="${type}" title="${name}${key?' ('+key+')':''}" aria-pressed="false"><span class="tool-icon" aria-hidden="true">${icon}</span><span class="tool-name">${name}<small>${CONFIG.structures[type]?CONFIG.structures[type].cost+' GOLD':type==='demolish'?'100% × HP REFUND':'CLICK TO REPAIR'}</small></span>${key?'<kbd>'+key+'</kbd>':''}</button>`).join('')+'<p class="palette-note">Build a fortress, not a road.<br><br>Drag walls or gates to draw a line.<br>Swap walls and gates before starting siege.<br><br>Cliff-mounted Titans damage your structures in their sweep.</p>';
     this.el.palette.addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(b){this.unlock();this.select(b.dataset.tool);}});
     this.el.actions.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;this.unlock();this.action(b.dataset.action,b.dataset.speed);});
     this.el.results.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b){this.unlock();this.action(b.dataset.action);}});
@@ -72,12 +72,12 @@ export class Interface {
     let status='';let invalid=false;
     if(performance.now()<this.messageUntil&&this.message){status=this.message;invalid=true;}
     else if(prep&&this.hover&&this.tool){const info=this.previewInfo,name=tools.find(t=>t[0]===this.tool)?.[1]||'';status=`${name}${info?.totalCost!=null?' · '+info.totalCost+' gold':info?.cost?' · '+info.cost+' gold':''}${this.previewCells.length>1?' · '+this.previewCells.length+' tiles':''}${info?.reason?' — '+info.reason:''}`;invalid=this.previewCells.some(p=>!p.valid);if(this.tool==='pendulum')status+=' · Orange sweep overlaps damage your buildings.';}
-    else if(prep)status='Build across the canyon. Leave a gate for the trade road. Ledges cannot support buildings.';
+    else if(prep)status='Build across the canyon. Leave a gate for the trade road.';
     else if(battle)status=p?'Space releases the Titan. Its hammer also damages friendly structures.':'Watch the breach: enemies choose the least costly route through your defenses.';
     else status='Inspect the battlefield, or retry with the exact pre-siege castle and treasury.';
-    if(prep&&this.hover&&this.tool==='gate'&&this.previewCells.length===1&&this.previewCells[0].replacement){status=`Replace Wall -> Gate | Cost: ${this.previewCells[0].cost} G`;invalid=!this.previewCells[0].valid;}
+    if(prep&&this.hover&&['wall','gate'].includes(this.tool)&&this.previewCells.length===1&&this.previewCells[0].replacement){const p=this.previewCells[0],label=p.cost<0?`Refund: ${-p.cost} G`:`Cost: ${p.cost} G`;status=`Replace ${p.replacedType[0].toUpperCase()+p.replacedType.slice(1)} -> ${this.tool[0].toUpperCase()+this.tool.slice(1)} | ${label}`;invalid=!p.valid;}
     else if(prep&&this.hover&&['house','farm'].includes(this.tool)&&this.previewInfo?.cost===0)status=status.replace('0 gold','FREE');
-    this.el.status.textContent=status;this.el.status.classList.toggle('invalid',invalid);this.el.status.classList.toggle('affordable',prep&&this.tool==='gate'&&!!this.previewCells[0]?.replacement&&!invalid);
+    this.el.status.textContent=status;this.el.status.classList.toggle('invalid',invalid);this.el.status.classList.toggle('affordable',prep&&['wall','gate'].includes(this.tool)&&!!this.previewCells[0]?.replacement&&!invalid);
     const result=!prep&&!battle;
     this.el.results.hidden=!result||this.inspected;
     if(result&&!this.inspected){

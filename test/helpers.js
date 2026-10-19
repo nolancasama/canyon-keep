@@ -21,6 +21,6 @@ export function advance(state, fn, seconds) {
 }
 export function crossing(column) {
   const points = [];
-  for (let y = 0; y < HEIGHT; y++) if (['.', ',', 'C', 'S'].includes(MAP[y][column])) points.push({ x: column, y });
+  for (let y = 0; y < HEIGHT; y++) if (['.', 'C', 'S'].includes(MAP[y][column])) points.push({ x: column, y });
   return points;
 }

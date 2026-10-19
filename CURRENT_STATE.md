@@ -11,8 +11,9 @@ Run `npm start`, then open http://localhost:5180 (or use `start.bat`).
 Run headless simulation tests with `npm test`. No dependencies or build step.
 
 ## Prototype
-- Whole-map Canvas2D castle engineering on the unchanged controller canyon,
-  with trade roads, gates, integrated towers, repairs, rubble and attack markers.
+- Whole-map Canvas2D castle engineering on the controller canyon, with unchanged
+  cliffs, pendulum sites and keep; former rocky ledges are buildable floor.
+  Trade roads, gates, integrated towers, repairs, rubble and attack markers remain.
 - Three scripted sieges with population 6/10/14, mandatory housing/food capacity,
   conditional-free houses/farms while capacity is short, and disabled Start Siege
   until housing, food and the trade road are ready. Preparation construction may
@@ -35,13 +36,13 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
 - Battle HUD, pause, 1×/2×/4× playback, procedural audio and mute.
 - Preparation demolition returns the amount actually paid, scaled by remaining
   HP (100% intact, zero for destroyed/free structures). Repair prices retain
-  their original base-cost calculation. The Gate tool atomically replaces a
-  living wall for gate price minus its HP-scaled refund; only the net cost is
-  required, and adjacent towers remain supported.
+  their original base-cost calculation. Walls and gates atomically replace one
+  another for new price minus the old HP-scaled refund, in clicks and drag lines;
+  only a positive net cost is required, and adjacent towers remain supported.
 - The always-visible Start Siege advisory lists every unmet requirement or all
   three successful checks and readiness. Blocked-road hints pulse on bordering
   walls/barricades; previews, palette and tooltips display FREE infrastructure
-  when needed and the wall-to-gate net replacement price.
+  when needed and wall/gate net replacement prices.
 
 ## Debug / Harness Surface
 `window.__game.state` is a live getter; UI/render code observes it without
@@ -59,7 +60,8 @@ mutation. `api.phase()` retains its phase-string interface. Campaign observation
 Actions include `place`, `placeLine`, `demolish`, `repair`, `repairAll`,
 `startSiege`, `triggerPendulum`, `setSpeed`, `stepSeconds`, `tick`,
 `continueCampaign`, `retrySiege`, `restartCampaign`, previews and capacity checks.
-`place('gate', x, y)` replaces a living wall atomically. `readiness()` returns
+`place('wall', x, y)` and `place('gate', x, y)` atomically replace a living gate
+and wall respectively. `readiness()` returns
 the shared housing/food/tradeRoad requirement list with `ok` and `message` for
 each; `canStart()` and `startSiege()` use that same list. `price(type)` returns
 the next placement price, and `blockedRoadTiles()` exposes map hint tiles.

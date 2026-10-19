@@ -131,12 +131,6 @@ export function createTerrain() {
   c.lineJoin='round';
   for(const [width,colour] of [[38,'#101b2070'],[26,'#68705a80'],[15,'#89907780'],[6,'#a5aa87b8'],[2,'#e0cea4']]){c.lineWidth=width;c.strokeStyle=colour;c.stroke(cliffs);}
   c.restore();
-  for(let y=0;y<HEIGHT;y++)for(let x=0;x<WIDTH;x++)if(terrainAt(x,y)===',')for(let i=0;i<4;i++) {
-    const rx=x*TILE+3+noise(x,y,i+9)*14,ry=y*TILE+4+noise(x,y,i+14)*12,r=3+noise(x,y,i)*4;
-    c.save();c.shadowColor='#302f2966';c.shadowBlur=3;c.shadowOffsetY=3;
-    c.fillStyle=i%2?'#737765':'#626a60';c.beginPath();c.moveTo(rx-r,ry);c.lineTo(rx-r*.5,ry-r*.7);c.lineTo(rx+r*.4,ry-r*.8);c.lineTo(rx+r,ry);c.lineTo(rx+r*.5,ry+r*.5);c.lineTo(rx-r*.6,ry+r*.6);c.closePath();c.fill();c.restore();
-    c.strokeStyle='#b6b69a';c.lineWidth=1;c.beginPath();c.moveTo(rx-r*.8,ry-1);c.lineTo(rx-r*.4,ry-r*.6);c.lineTo(rx+r*.3,ry-r*.7);c.stroke();
-  }
   c.setLineDash([3,5]);c.strokeStyle='#e7e3bb4d';c.lineWidth=1;
   const castle=(x,y)=>/[CK]/.test(terrainAt(x,y));
   for(let y=0;y<HEIGHT;y++) for(let x=0;x<WIDTH;x++) if(castle(x,y)) {

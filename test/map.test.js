@@ -7,6 +7,46 @@ import { isWalkable, tileAt } from '../src/sim/grid.js';
 const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const column = x => Array.from({ length: HEIGHT }, (_, y) => y).filter(y => isWalkable(x, y));
 const center = values => values.reduce((sum, n) => sum + n, 0) / values.length;
+// Cliff mask from the authored map before ledges became floor. Non-cliff tiles
+// are dots so this verifies that only terrain type, not canyon geometry, moved.
+const CLIFF_MASK = [
+  '################################################################',
+  '################################################################',
+  '################################################################',
+  '################################################################',
+  '..............##################################################',
+  '................################################################',
+  '...................#############################################',
+  '...................###############################......########',
+  '...................#############################..........######',
+  '##########..........###########################............#####',
+  '############........##########################..............####',
+  '##############.......########################................###',
+  '###############......########################................###',
+  '################......######################..................##',
+  '#################.....######################..................##',
+  '##################....#####################...................##',
+  '###################....###################.....................#',
+  '####################....#################......................#',
+  '####################.....###############.......................#',
+  '####################......#############.......................##',
+  '#####################.......##########........................##',
+  '#####################........########.........................##',
+  '######################........######.........................###',
+  '#######################.........##...........................###',
+  '#######################.....................##..............####',
+  '########################...................####............#####',
+  '#########################.................######..........######',
+  '##########################................########......########',
+  '############################.............#######################',
+  '######################.#######.........#########################',
+  '###############################....#############################',
+  '########################################.#######################',
+  '################################################################',
+  '################################################################',
+  '################################################################',
+  '################################################################',
+];
 
 test('map is exactly 64 by 36 and only spawn tiles open its boundary', () => {
   assert.equal(WIDTH, 64);
@@ -14,7 +54,8 @@ test('map is exactly 64 by 36 and only spawn tiles open its boundary', () => {
   assert.equal(MAP.length, HEIGHT);
   for (const row of MAP) {
     assert.equal(row.length, WIDTH);
-    assert.match(row, /^[#.,CKS123]+$/);
+    assert.match(row, /^[#.CKS123]+$/);
+    assert.equal(row.includes(','), false, 'rocky ledges were converted to buildable floor');
   }
   const openings = [];
   for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
@@ -26,6 +67,8 @@ test('map is exactly 64 by 36 and only spawn tiles open its boundary', () => {
   }
   assert.deepEqual(openings, SPAWNS);
   assert.equal(SPAWNS.length, 5);
+  assert.deepEqual(MAP.map(row => row.replace(/[^#]/g, '.')), CLIFF_MASK,
+    'converting ledges must not move any cliff');
 });
 
 test('all walkable terrain connects to the western spawn without crossing cliffs', () => {
@@ -46,15 +89,14 @@ test('all walkable terrain connects to the western spawn without crossing cliffs
   }
 });
 
-test('authored canyon bends, narrows to a ledged three-tile choke, and opens into the basin', () => {
+test('authored canyon bends, narrows to a three-tile choke, and opens into the basin', () => {
   assert.equal(column(5).length, 5);
-  // The descending throat has only three shared crossing tiles between rows;
-  // its ledges prevent treating that narrow neck as a convenient straight wall.
+  // The descending throat has only three shared crossing tiles between rows.
   const throat = Array.from({ length: WIDTH }, (_, x) => x)
     .filter(x => isWalkable(x, 15) && isWalkable(x, 16) && x < 30);
   assert.deepEqual(throat, [19, 20, 21]);
-  assert.equal(tileAt(19, 15), ',');
-  assert.equal(tileAt(21, 16), ',');
+  assert.equal(tileAt(19, 15), '.');
+  assert.equal(tileAt(21, 16), '.');
   // Two descending sections then a turn back toward the basin center prevent
   // this map from degenerating into a straight corridor.
   assert.ok(center(column(5)) < center(column(20)));
@@ -63,7 +105,6 @@ test('authored canyon bends, narrows to a ledged three-tile choke, and opens int
   for (let y = 13; y <= 21; y++) for (let x = 45; x <= 61; x++) {
     assert.ok('CK'.includes(tileAt(x, y)), `Basin floor at ${x},${y}`);
   }
-  assert.ok(MAP.slice(8, 16).some(row => row.includes(',')), 'Bend must have ledges too');
 });
 
 test('the keep has exactly its declared three-by-three footprint', () => {

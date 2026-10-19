@@ -9,10 +9,10 @@ import { createGame, tileOf, crossing } from './helpers.js';
 
 test('terrain, occupancy, spawn buffer, and tower integration constrain placement', () => {
   const game = createGame();
-  for (const kind of ['#', ',']) {
-    const { x, y } = tileOf(kind);
-    assert.equal(game.api.place('wall', x, y).ok, false);
-  }
+  const cliff = tileOf('#');
+  assert.equal(game.api.place('wall', cliff.x, cliff.y).ok, false);
+  // Former rocky ledges are ordinary buildable canyon floor.
+  assert.equal(game.api.place('wall', 8, 8).ok, true);
   assert.equal(game.api.place('wall', KEEP.x, KEEP.y).ok, false);
   const sy = MAP.findIndex(row => row[0] === 'S');
   assert.equal(game.api.place('wall', 2, sy).ok, false);
@@ -196,6 +196,58 @@ test('gate replacement charges only the net cost and is atomic when unaffordable
   assert.equal(game.api.preview('gate', 52, 10).valid, false);
   assert.equal(game.api.place('gate', 52, 10).ok, false);
   assert.equal(JSON.stringify(game.state), before);
+});
+
+test('wall replacement refunds intact gates and charges for damaged gates', () => {
+  for (const [fraction, expectedCost, expectedDelta] of [[1, -40, 40], [0.5, -10, 10]]) {
+    const game = createGame();
+    assert.equal(game.api.place('gate', 52, 10).ok, true);
+    const gate = structureAt(game.state, 52, 10);
+    gate.hp *= fraction;
+    const before = game.state.gold;
+    const preview = game.api.preview('wall', 52, 10);
+    assert.equal(preview.valid, true);
+    assert.equal(preview.cost, expectedCost);
+    assert.equal(game.api.place('wall', 52, 10).ok, true);
+    assert.equal(game.state.gold, before + expectedDelta);
+    const wall = structureAt(game.state, 52, 10);
+    assert.equal(wall.type, 'wall');
+    assert.equal(wall.paidCost, CONFIG.structures.wall.cost);
+  }
+});
+
+test('wall and gate drag lines replace their counterpart, skip their own type, and stop before an unaffordable tile', () => {
+  const game = createGame();
+  assert.equal(game.api.place('wall', 53, 10).ok, true);
+  assert.equal(game.api.place('gate', 54, 10).ok, true);
+  const before = game.state.gold;
+  const preview = game.api.previewLine('wall', 52, 10, 55, 10);
+  assert.equal(preview.cost, 0, 'floor costs offset the intact-gate refund');
+  assert.equal(game.api.placeLine('wall', 52, 10, 55, 10).placed, 3);
+  assert.equal(game.state.gold, before);
+  for (let x = 52; x <= 55; x++) assert.equal(structureAt(game.state, x, 10).type, 'wall');
+
+  const limited = createGame();
+  assert.equal(limited.api.place('wall', 52, 10).ok, true);
+  assert.equal(limited.api.place('wall', 53, 10).ok, true);
+  limited.state.gold = 50;
+  const result = limited.api.placeLine('gate', 52, 10, 54, 10);
+  assert.equal(result.placed, 1);
+  assert.equal(structureAt(limited.state, 52, 10).type, 'gate');
+  assert.equal(structureAt(limited.state, 53, 10).type, 'wall', 'the unaffordable replacement is untouched');
+  assert.equal(structureAt(limited.state, 54, 10), null, 'the line stops after the failed tile');
+  assert.equal(limited.state.gold, 10);
+});
+
+test('gate-to-wall replacement may seal the road and readiness reports the blockage', () => {
+  const game = createGame();
+  const points = crossing(5);
+  for (const point of points) assert.equal(game.api.place('wall', point.x, point.y).ok, true);
+  const gatePoint = points[2];
+  assert.equal(game.api.place('gate', gatePoint.x, gatePoint.y).ok, true);
+  assert.equal(game.api.readiness().find(r => r.id === 'tradeRoad').ok, true);
+  assert.equal(game.api.place('wall', gatePoint.x, gatePoint.y).ok, true);
+  assert.equal(game.api.readiness().find(r => r.id === 'tradeRoad').ok, false);
 });
 
 test('damaged-wall replacement uses HP-scaled refund and leaves neighbours and tower support intact', () => {

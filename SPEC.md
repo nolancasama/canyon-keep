@@ -70,7 +70,7 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
   scaled to fit the window (letterboxed, crisp). Whole map always visible:
   **no camera scrolling** (amended from brief; the map fits one screen).
 - ASCII legend: `#` cliff (impassable, unbuildable), `.` canyon floor (buildable),
-  `,` rocky ledge (walkable, **not buildable**), `C` castle-zone floor (buildable),
+  `C` castle-zone floor (buildable),
   `K` keep footprint (3×3), `S` enemy spawn edge tiles, `1`/`2`/`3` pendulum
   mount sites (cliff tiles that anchor a pendulum; impassable).
 - Shape requirements:
@@ -80,17 +80,14 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
   - Width profile: entrance stretch 5–6 tiles; **one choke of 3 tiles** about
     40% along; mid stretch 6–8; widening to the basin; basin ≈ 20 × 18 tiles of
     `C` with the keep near the back (right) wall.
-  - Rocky-ledge patches (`,`) at bends and near the choke so the narrowest point
-    is not trivially the perfect wall line (walkable but unbuildable tiles force
-    walls to be longer or set elsewhere).
   - Exactly 3 pendulum sites, each on a cliff edge at a different stretch
     (one before the choke, one at a bend in the mid stretch, one near the basin
     mouth). Each site's metadata: pivot tile, arm length (tiles), start angle,
     end angle — the sweep arc must cross the full canyon width at that point.
   - Cliffs fully enclose everything else; the only entry is the spawn edge.
 - Terrain must read instantly: sandy floor with subtle noise, dark layered cliffs
-  with a lighter rim/shadow edge where cliff meets floor, ledges as scattered
-  rocks, castle zone a slightly greener/paler tint with a faint dashed border.
+  with a lighter rim/shadow edge where cliff meets floor, castle zone a slightly
+  greener/paler tint with a faint dashed border.
   Render terrain once to an offscreen canvas.
 
 ## 3. Structures & construction (`src/sim/build.js`, values in config)
@@ -112,7 +109,7 @@ Rules:
   intact food is below population. Otherwise their normal prices are 80/70.
   Each placed structure records `paidCost`, the amount actually paid. The next
   price appears in previews, palette and tooltips; defensive costs are unchanged.
-- Floor tiles (`.`/`C`) only; no overlap with cliffs, ledges, keep, other
+- Floor tiles (`.`/`C`) only; no overlap with cliffs, keep, other
   structures, or the spawn column + 2 tiles in front of it.
 - **Towers**: anywhere in the castle zone (`C`), or on canyon floor only if
   **orthogonally adjacent to a wall or gate** ("integrated into the castle").
@@ -120,21 +117,22 @@ Rules:
   with a reason.
 - **Trade-road rule:** preparation construction may seal the canyon or enclose
   the keep. Start Siege requires a 4-connected route from the spawn edge to
-  the keep over floor/ledge/**gate** tiles, blocked by walls, barricades,
+  the keep over floor/**gate** tiles, blocked by walls, barricades,
   towers, houses, farms and cliffs. Terrain, overlap, footprint, tower support,
   spawn safety and gold checks still apply to placement. Enemies treat gates
   as solid; their pathing is unchanged.
-- Using `place('gate', x, y)` on a living wall replaces it atomically with a
-  full-HP gate, including inside a sealed line. The net cost is gate price
-  minus the wall's HP-scaled refund; only that net amount must be affordable.
-  Failure leaves the state unchanged. The gate records its full purchase price,
-  preserves adjacent tower support, and updates occupancy, flow field and wall
-  connections. Other occupied tiles remain invalid. Single-click replacement
-  is sufficient; dragging replacements along a wall is not required.
+- Using either wall/gate tool on the other living structure replaces it atomically
+  with a full-HP structure, including inside a sealed line. The net is the new
+  price minus the old structure's HP-scaled refund; only a positive net amount
+  must be affordable. Failure leaves the state unchanged. The replacement records
+  its full purchase price, preserves adjacent tower support, and updates occupancy,
+  flow field and wall connections. Other occupied tiles remain invalid.
 - Left-click places; drag with wall/barricade/gate places a 4-connected line
-  (L-shaped: horizontal then vertical leg); preview shows each tile green/red
-  and the total cost; on release place every valid tile in order until gold
-  runs out. Right-click or Esc cancels tool. Hotkeys: 1 Wall, 2 Gate,
+  (L-shaped: horizontal then vertical leg); wall/gate lines replace crossed
+  gates/walls respectively and skip matching existing structures at no charge.
+  Preview shows each tile green/red and the total net cost or refund; on release
+  places every valid tile in order until gold runs out. Right-click or Esc cancels
+  tool. Hotkeys: 1 Wall, 2 Gate,
   3 Barricade, 4 Tower, 5 House, 6 Farm, 7 Pendulum, X Demolish, Space pendulum
   (siege), P pause, F speed cycle.
 - Demolish during prep: refund `round(paidCost × hp/maxHp)` (refund rate 1.0).
@@ -160,7 +158,7 @@ Rules:
 
 **Pathing — breach-cost flow field.** One Dijkstra flow field toward the keep
 over 4-/8-connected tiles (no corner cutting past cliffs). Tile cost: floor 1,
-ledge 1.5, cliff ∞, structure `1 + hp × BREACH_COST_PER_HP` (config, start 0.08).
+cliff ∞, structure `1 + hp × BREACH_COST_PER_HP` (config, start 0.08).
 Every enemy follows the field; if its next tile holds a structure it stops and
 attacks that structure until it is destroyed. So enemies always walk toward the
 **cheapest breach on the direct route** — understandable, never stuck, not
@@ -291,9 +289,10 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
   bordering the spawn-reachable region receive a subtle pulsing red outline.
   No other path visualisation is shown. The sim supplies these hint tiles via
   `api.blockedRoadTiles()`; the UI does not implement readiness checks.
-- Gate-on-wall preview reads "Replace Wall -> Gate | Cost: N G", green when
-  affordable and red otherwise. Infrastructure previews/palette/tooltips show
-  FREE when the next house/farm is needed and its normal price otherwise.
+- Wall/gate swap previews read "Replace Wall -> Gate | Cost: N G" or
+  "Replace Gate -> Wall | Refund: N G" (or `Cost` for a positive net), green
+  when affordable and red otherwise. Infrastructure previews/palette/tooltips
+  show FREE when the next house/farm is needed and its normal price otherwise.
 - Battle: siege name + progress bar (schedule time), inhabitants remaining,
   keep HP bar, boss HP bar (when present), pendulum status widget (READY pulsing /
   recharge ring with seconds) with key hint, pause + 1×/2×/4× buttons.
@@ -315,8 +314,9 @@ repair math, flow field never routes through cliffs and prefers weaker walls,
 enemies breach a wall and continue, explosion single-detonation + chain + 6-tile
 structure cap, pendulum hit-once-per-swing + cooldown + boss survives one hit,
 conditional-free infrastructure, seeded construction/refund conservation,
-atomic wall-to-gate replacement (net affordability, no mutation on failure,
-support and flow updates), readiness list + Start Siege gating,
+atomic wall/gate replacement in either direction (net affordability, no mutation
+on failure, support and flow updates), line replacement, readiness list + Start
+Siege gating,
 reward/penalty math incl. `keepReached`
 counted once and payout floor, snapshot retry restores exact state and does not
 duplicate rewards, determinism (two runs of S1 with same build → identical

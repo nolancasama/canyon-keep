@@ -67,18 +67,22 @@ export function refundValue(structure) {
   return Math.round((structure.paidCost ?? structure.cost) * CONFIG.refundRate * health);
 }
 
-export function placement(state, type, x, y) {
+export function placement(state, type, x, y, { line = false } = {}) {
   const def = CONFIG.structures[type];
   if (!def || type === 'keep') return failure('Select a construction tool');
   const cost = price(state, type);
   if (state.phase !== 'prep') return failure('Construction is available during preparation', cost);
   if (!Number.isInteger(x) || !Number.isInteger(y)) return failure('Choose a map tile', cost);
-  const wall = type === 'gate' ? structureAt(state, x, y) : null;
-  if (wall?.type === 'wall') {
-    const refund = refundValue(wall), netCost = def.cost - refund;
+  const existing = structureAt(state, x, y);
+  const interchangeable = (type === 'gate' && existing?.type === 'wall') ||
+    (type === 'wall' && existing?.type === 'gate');
+  if (interchangeable) {
+    const refund = refundValue(existing), netCost = def.cost - refund;
     return { ...(state.gold < netCost ? failure('Not enough gold', netCost) :
-      { valid: true, ok: true, reason: '', cost: netCost }), replacement: true, replacedId: wall.id, refund };
+      { valid: true, ok: true, reason: '', cost: netCost }), replacement: true,
+      replacedId: existing.id, replacedType: existing.type, refund };
   }
+  if (line && existing?.type === type) return { valid: true, ok: true, reason: '', cost: 0, skipped: true };
   if (type === 'pendulum') {
     const site = SITES.find(s => s.x === x && s.y === y);
     if (!site) return failure('Choose one of the three cliff mount sites', def.cost);
@@ -89,7 +93,7 @@ export function placement(state, type, x, y) {
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const tx = x + dx, ty = y + dy;
     if (tx < CONFIG.spawnSafeColumns) return failure('Keep the spawn approach clear', cost);
-    if (!'.C'.includes(tileAt(tx, ty))) return failure('Build on canyon or castle floor; ledges cannot support buildings', cost);
+    if (!'.C'.includes(tileAt(tx, ty))) return failure('Build on canyon or castle floor', cost);
     if (structureAt(state, tx, ty)) return failure('Another structure occupies this tile', cost);
   }
   if (type === 'tower' && tileAt(x, y) !== 'C' && !supported(state, { x, y })) {
@@ -99,9 +103,10 @@ export function placement(state, type, x, y) {
   return { valid: true, ok: true, reason: '', cost };
 }
 
-export function place(state, type, x, y) {
-  const check = placement(state, type, x, y);
+export function place(state, type, x, y, options) {
+  const check = placement(state, type, x, y, options);
   if (!check.valid) return check;
+  if (check.skipped) return check;
   const def = CONFIG.structures[type];
   const id = `${type}-${state.nextId++}`;
   let structure;
@@ -138,13 +143,16 @@ export function previewLine(state, type, x0, y0, x1, y1) {
   const scratch = { ...state, structures: state.structures.map(s => ({ ...s })),
     inhabitants: state.inhabitants?.map(p => ({ ...p })),
     rubble: [...(state.rubble ?? [])], events: [], eventLog: [] };
+  let outOfGold = false;
   const tiles = lineTiles(x0, y0, x1, y1).map(({ x, y }) => {
-    const result = placement(scratch, type, x, y);
-    if (result.valid) place(scratch, type, x, y);
+    if (outOfGold) return { x, y, ...failure('Not enough gold') };
+    const result = placement(scratch, type, x, y, { line: true });
+    if (result.valid) place(scratch, type, x, y, { line: true });
+    else if (result.reason === 'Not enough gold') outOfGold = true;
     return { x, y, ...result };
   });
   return { tiles, cost: tiles.filter(t => t.valid).reduce((n, t) => n + t.cost, 0),
-    totalCost: tiles.reduce((n, t) => n + t.cost, 0),
+    totalCost: tiles.filter(t => t.valid).reduce((n, t) => n + t.cost, 0),
     reason: tiles.find(t => !t.valid)?.reason ?? '' };
 }
 
@@ -152,11 +160,11 @@ export function placeLine(state, type, x0, y0, x1, y1) {
   if (!['wall', 'gate', 'barricade'].includes(type)) return failure('This tool places one building at a time');
   const results = [];
   for (const { x, y } of lineTiles(x0, y0, x1, y1)) {
-    const result = place(state, type, x, y);
+    const result = place(state, type, x, y, { line: true });
     results.push({ x, y, ...result });
     if (!result.ok && result.reason === 'Not enough gold') break;
   }
-  return { ok: results.some(r => r.ok), placed: results.filter(r => r.ok).length,
+  return { ok: results.some(r => r.ok && !r.skipped), placed: results.filter(r => r.ok && !r.skipped).length,
     results, reason: results.find(r => !r.ok)?.reason ?? '' };
 }
 
