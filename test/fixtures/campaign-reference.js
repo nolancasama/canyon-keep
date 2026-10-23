@@ -1,5 +1,5 @@
-// Only public preparation actions spend money, including conditionally free
-// required houses/farms. No injected structures, healing, treasury injections,
+// Only public preparation actions spend money; the client grows its settlement.
+// No injected structures, healing, treasury injections,
 // or pendulum triggers are used by the campaign plan.
 // The shorter outer curtain buys six towers initially instead of the accepted
 // four-tower basin reference's longer curtain. Cost: 960 gold.
@@ -14,14 +14,10 @@ export const CAMPAIGN_INITIAL_BUILD = [
 ];
 export const CAMPAIGN_ADDITIONS = {
   2: [
-    {type:'house',x:59,y:11},
-    {type:'farm',x:59,y:20},
     {type:'tower',x:50,y:25},
     {type:'tower',x:53,y:25},
   ],
   3: [
-    {type:'house',x:60,y:14},
-    {type:'farm',x:58,y:23},
     ...Array.from({length:7},(_,i)=>({type:'wall',x:54,y:i+17})),
     {type:'tower',x:49,y:17},
     {type:'tower',x:52,y:17},
@@ -41,7 +37,7 @@ export function prepareCampaignSiege(game) {
   }
   // Breaches are rebuilt at full cost; surviving buildings retain their damage
   // until this explicitly budgeted repair action.
-  for(const s of [...game.state.structures]) if(s.destroyed&&s.type!=='tower'&&!game.state.structures.some(live=>!live.destroyed&&live.x===s.x&&live.y===s.y)) {
+  for(const s of [...game.state.structures]) if(s.destroyed&&!['tower','house','farm','keep'].includes(s.type)&&!game.state.structures.some(live=>!live.destroyed&&live.x===s.x&&live.y===s.y)) {
     requireAction(api.place(s.type,s.x,s.y),`rebuild ${s.type} at ${s.x},${s.y}`);
   }
   requireAction(api.repairAll(),'repair surviving castle');

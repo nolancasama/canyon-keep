@@ -7,6 +7,8 @@ two disagree, this file wins. Unrelated to `../castlerush` — never read, impor
 modify it.
 
 Guiding principle: *a small castle-engineering game, not road-side tower defense.*
+The player is the client's hired fortress engineer. Gold funds military works;
+the client owns and automatically grows houses, farms and the population.
 Designing, testing, repairing and improving the castle is the fun.
 Prefer a finished minimal mechanic over an elaborate unfinished one. No scope
 beyond this file (no RPG, crafting, resources other than gold, multiplayer,
@@ -54,6 +56,7 @@ src/sim/pendulum.js      Titan's Pendulum state machine + sweep hit detection
 src/sim/inhabitants.js   idle/flee/shelter behaviour
 src/sim/siege.js         createSiegeState, stepSiege(state, dt), end conditions, event log
 src/sim/campaign.js      campaign state, snapshots, retry, rewards/penalties, population growth
+src/sim/settlement.js    performance rating, deterministic client settlement growth
 src/render/*.js          terrain cache, structures, units, effects, overlays (reads state only)
 src/ui/*.js              HUD, build palette, results screen, input → api calls
 src/main.js              boot, loop, wiring
@@ -98,17 +101,16 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
 | Gate | 60 | 180 | 1×1 | blocks enemies; **counts as open for the trade-road check** |
 | Barricade | 8 | 70 | 1×1 | cheap forward obstacle |
 | Archer tower | 120 | 250 | 1×1 | range 6.5 tiles, 12 dmg, 1.0 shot/s, arrows are visible projectiles |
-| House | 0 while needed, else 80 | 120 | 2×2 | +4 housing |
-| Farm | 0 while needed, else 70 | 100 | 2×2 | +6 food |
+| House (client-owned) | free growth | 120 | 2×2 | +4 housing |
+| Farm (client-owned) | free growth | 100 | 2×2 | +6 food |
 | Titan's Pendulum | 400 | — | site | one only, on a site; not attackable |
 | Keep (pre-placed) | — | 2000 | 3×3 | goal; housing 6, food 6; not demolishable |
 
 Rules:
-- Houses and farms are always FREE (`paidCost` 0) but can only be built while
-  needed: a house while intact housing (keep + living houses) is below
-  population, a farm while intact food is below population. Otherwise the tool
-  is locked and greyed in the palette ("NOT NEEDED"). Their config cost (80/70)
-  is only used for repair pricing. Defensive costs are unchanged.
+- Houses and farms have no player tools. Placement, line placement, previews,
+  demolition, replacement and repair cannot change houses, farms or the keep,
+  including destroyed civilian footprints. Repair all affects military works only.
+  Civilian construction and rebuilding are automatic and charge no gold.
 - Floor tiles (`.`/`C`) only; no overlap with cliffs, keep, other
   structures, or the spawn column + 2 tiles in front of it.
 - **Towers**: anywhere in the castle zone (`C`), or on canyon floor only if
@@ -133,11 +135,11 @@ Rules:
   Preview shows each tile green/red and the total net cost or refund; on release
   places every valid tile in order until gold runs out. Right-click or Esc cancels
   tool. Hotkeys: 1 Wall, 2 Gate,
-  3 Barricade, 4 Tower, 5 House, 6 Farm, 7 Pendulum, X Demolish, Space pendulum
+  3 Barricade, 4 Tower, 7 Pendulum, X Demolish, Space pendulum
   (siege), P pause, F speed cycle.
 - Demolish during prep: refund `round(paidCost × hp/maxHp)` (refund rate 1.0).
-  Destroyed structures/rubble refund zero; free buildings refund zero and can
-  be moved at no gold cost while needed. Tower-support restrictions still apply.
+  Destroyed structures/rubble refund zero. Client buildings cannot be moved.
+  Tower-support restrictions still apply.
 - Repair (prep only): button "Repair all" + click-repair with the demolish-style
   tool; cost `ceil(cost × 0.5 × missingHp/maxHp)`. Destroyed structures leave
   rubble markers in prep (shows where breaches happened) and can be rebuilt at
@@ -242,29 +244,30 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 ## 9. Campaign, economy, rewards (`src/sim/campaign.js`)
 
 - Start 1000 gold, population 6, keep gives housing 6 and food 6.
-- Population before siege 1/2/3: 6 / 10 / 14 (fixed table; losses cost gold,
-  not population — keeps the schedule deterministic).
-- **Start Siege disabled** unless housing ≥ population, food ≥ population and
-  the trade road is open. A single simulation readiness function supplies every
-  requirement as `{ id, ok, message }` to `canStart()`, `startSiege()` and the UI.
-  `api.readiness()` exposes the full housing, food and tradeRoad requirement
-  list read-only. Shortage messages are "Build N additional house(s)." and
-  "Build N additional farm(s).", rounded up by each building's capacity. The
-  blocked-road message is "Castle entrance blocked. Install a gate to create a
-  route to the keep." All requirements must pass before a snapshot is taken.
+- Siege 1 starts keep-only with six inhabitants. After victories in Sieges 1
+  and 2, Continue rebuilds destroyed civilian buildings at their positions for
+  free, then adds performance-based growth. Population becomes 6 + 4 per house,
+  with inhabitants replenished and re-homed. There is no growth after Siege 3.
+- **Start Siege requires only an open trade road.** `api.readiness()` exposes
+  a fresh `{ id:'tradeRoad', ok, message }` observation shared by Start and UI.
+  Blocked message: "Castle entrance blocked. Install a gate to create a route
+  to the keep." Housing and food are informative and never block readiness.
 - Snapshot taken at Start Siege (full prep state incl. gold, structures, HP,
   pendulum, RNG seed). **Retry Siege** restores it exactly; rewards are only
   applied on leaving the results screen of a *victory* via "Continue", and the
   campaign records siege index so rewards can't be applied twice. Restart
   Campaign returns to the initial state.
-- Rewards (victory only): completion 300 / 450 / 400; all inhabitants alive +100;
-  no enemy reached the keep +75; boss defeated +100 (always true on victory but
-  shown); structural damage < 15% of total structure HP +50; spent < 70% of
+- Kill bounties pay immediately at the single enemy death point, regardless of
+  cause: foot 2 G, chiseler 3 G, powder 5 G, boss 100 G. Each enemy pays once;
+  siege stats track gold and per-type kills. Renderer events produce floating
+  gold labels, grouped within 0.3 seconds and two tiles. Battle treasury is live.
+- Rewards (victory only): completion 188 / 238 / 50; all inhabitants alive +100;
+  no enemy reached the keep +75; structural damage < 15% of total structure HP +50; spent < 70% of
   pre-siege gold +50.
 - Penalties: −40 per inhabitant killed; −50 once if `keepReached`; −1 per 10 keep
   HP lost; −15 per house/farm destroyed.
-- Payout floor: net payout never below 250. Mandatory houses/farms are free
-  while needed, independent of the treasury.
+- Payout floor: net payout never below 100. Bounties are already in the treasury
+  and are an informational results row, never paid a second time. No boss bonus.
 - Defeat: results show the same breakdown, payout 0, buttons Retry Siege /
   Restart Campaign. After S3 victory: campaign-complete screen with totals.
 - Results screen lists: result, enemies defeated, boss defeated, inhabitants
@@ -273,14 +276,38 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
   panel to view the battlefield (rubble + attack markers) before Continue.
 - All economy and reward numbers in `src/config.js`.
 
+Performance and settlement growth:
+- Rating (0–100): surviving inhabitant fraction ×40, remaining keep HP fraction
+  ×30, intact civilian-building fraction ×20 (full credit if none existed),
+  and +10 if no enemy reached the keep. Tiers use the unrounded rating:
+  standard <80 adds 1 house/1 farm; strong 80–94 adds 2/2; exceptional ≥95 adds 3/2.
+  Results and campaign completion show the rating and tier.
+- Deterministic 2×2 sites use floor/castle tiles ≥7 columns from the spawn
+  edge, avoid every structure, mount site and a built pendulum's strike band,
+  leave one tile from living military structures, and preserve the trade road
+  after every placement. No player military structures are changed.
+- Flood fill from spawns treats living military structures (including gates)
+  as blockers and civilians as traversable: unreached floor is inside walls.
+  Houses cluster near habitation using BFS distance from the keep; farms occupy
+  the next outward ring, preferring open neighbours. Ties use (y,x). Exceptional
+  growth puts at least one new building at the best outside site when available.
+  Add a farm if food would fall short; place what fits and report shortages.
+- Continue shows a state-backed growth report with tier, settlers, added houses
+  and farms, outside-wall warning and shortages, ending "Your next assignment:
+  Protect the growing settlement." Dismissal reveals prep. New buildings pulse
+  until the first successful build or eight seconds of visible prep.
+- The next siege's Start snapshot includes growth, so retry restores exact
+  treasury and settlement without duplicating bounties, buildings or inhabitants.
+  Restart returns to the keep-only settlement.
+
 ## 10. HUD
 
 - Prep (top bar + left build palette): gold, population, housing x/y, food x/y
   (red when short), selected tool + cost, hovered placement reason when invalid,
   Repair all (cost shown), Start Siege (disabled until ready), siege number/name.
 - An always-visible advisory directly under Start Siege shows "Cannot start
-  siege:" and every unmet requirement in a warning colour, or three checkmarked
-  lines ("Housing sufficient", "Food sufficient", "Castle entrance accessible")
+  siege:" and the unmet road requirement in a warning colour, or a checkmarked
+  "Castle entrance accessible" line
   followed by "Ready for battle!". It updates after every build, demolition and
   replacement, and fits without scrolling at 1366×768 and 1440×860. Housing and
   food indicators remain in the HUD. When blocked, the advisory also explains
@@ -291,8 +318,7 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
   `api.blockedRoadTiles()`; the UI does not implement readiness checks.
 - Wall/gate swap previews read "Replace Wall -> Gate | Cost: N G" or
   "Replace Gate -> Wall | Refund: N G" (or `Cost` for a positive net), green
-  when affordable and red otherwise. Infrastructure previews/palette/tooltips
-  show FREE when a house/farm is needed and NOT NEEDED (locked) otherwise.
+  when affordable and red otherwise. Houses and farms are absent from the palette.
 - Battle: siege name + progress bar (schedule time), inhabitants remaining,
   keep HP bar, boss HP bar (when present), pendulum status widget (READY pulsing /
   recharge ring with seconds) with key hint, pause + 1×/2×/4× buttons.
@@ -313,7 +339,8 @@ road), line placement stops at gold, paid-cost/HP-scaled full refund and
 repair math, flow field never routes through cliffs and prefers weaker walls,
 enemies breach a wall and continue, explosion single-detonation + chain + 6-tile
 structure cap, pendulum hit-once-per-swing + cooldown + boss survives one hit,
-conditional-free infrastructure, seeded construction/refund conservation,
+client building protection, automatic growth/rating, bounties paid once and
+retry rollback, seeded construction/refund conservation,
 atomic wall/gate replacement in either direction (net affordability, no mutation
 on failure, support and flow updates), line replacement, readiness list + Start
 Siege gating,

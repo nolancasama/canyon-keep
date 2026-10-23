@@ -4,6 +4,7 @@ import * as build from './build.js';
 import { createSiegeState, stepSiege } from './siege.js';
 import { triggerPendulum } from './pendulum.js';
 import { createInhabitants } from './inhabitants.js';
+import { rateDefense, growSettlement } from './settlement.js';
 
 export function calculateResults(state) {
   const rules=CONFIG.rewards, before=state.snapshot;
@@ -18,7 +19,6 @@ export function calculateResults(state) {
     {key:'completion',label:'Siege completion',amount:rules.completion[state.siegeIndex-1]},
     {key:'allSaved',label:'All inhabitants alive',amount:lost===0?rules.allSaved:0},
     {key:'keepUntouched',label:'No enemy reached the keep',amount:!state.keepReached?rules.keepUntouched:0},
-    {key:'boss',label:'Boss defeated bonus',amount:state.stats.bossDefeated?rules.boss:0},
     {key:'lowDamage',label:'Structural damage below 15%',amount:damage<totalHp*rules.damageThreshold?rules.lowDamage:0},
     {key:'economical',label:'Spent less than 70% of prep treasury',amount:before.prepGold-before.gold<before.prepGold*rules.spendingThreshold?rules.economical:0},
   ];
@@ -33,6 +33,7 @@ export function calculateResults(state) {
   const victory=state.phase==='victory';
   const payout=victory?Math.max(rules.floor,rawPayout):0;
   return {siegeIndex:state.siegeIndex,result:state.phase,enemiesDefeated:state.stats.enemiesDefeated,
+    ...rateDefense(state),bountyGold:state.stats.bountyGold??0,
     bossDefeated:state.stats.bossDefeated,inhabitantsSaved:state.population-lost,inhabitantsLost:lost,
     enemiesReachedKeep:state.stats.keepReachedEnemies??0,buildingsDestroyed:destroyed.length,
     keepDamage,structuralDamage:damage,bonuses,penalties,rawPayout,payout,
@@ -46,12 +47,14 @@ export function createCampaignState(seed = CONFIG.seed) {
     population: CONFIG.population, rng: { seed: seed >>> 0 }, nextId: 1,
     structures: [{ id: 'keep', type: 'keep', x: KEEP.x, y: KEEP.y, w: keep.w, h: keep.h, hp: keep.hp, maxHp: keep.hp, cost: 0, destroyed: false }],
     pendulum: null, time: 0, tick: 0, speed: 1, flowRevision: 0,
+    prepTime: 0, growthReport: null, growthHighlight: null,
     events: [], eventLog: [], eventSequence: 0, enemies: [], inhabitants: [],
     rubble: [], attackMarkers: [], explosions: [], arrows: [], schedule: [], spawnIndex: 0,
     keepReached: false,
     campaign: { rewardedSieges: [], history: [], complete: false,
       totals: { payout: 0, enemiesDefeated: 0, inhabitantsSaved: 0, inhabitantsLost: 0, buildingsDestroyed: 0, keepDamage: 0 } },
-    stats: { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false },
+    stats: { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false,
+      bountyGold: 0, bountyCounts: { foot: 0, chiseler: 0, powder: 0, boss: 0 } },
   };
   createInhabitants(state);
   return state;
@@ -75,7 +78,6 @@ export function createGame(seed = CONFIG.seed) {
     previewLine: (type, x0, y0, x1, y1) => build.previewLine(state, type, x0, y0, x1, y1),
     capacity: () => build.capacity(state),
     price: type => build.price(state, type),
-    civilianNeeded: type => build.civilianNeeded(state, type),
     readiness: () => build.readiness(state),
     blockedRoadTiles: () => build.blockedRoadTiles(state),
     canStart: () => build.canStart(state),
@@ -83,6 +85,7 @@ export function createGame(seed = CONFIG.seed) {
       const check = build.canStart(state);
       if (state.phase !== 'prep' || !check.ok) return { ok: false, reason: check.reason || 'Preparation only' };
       state.snapshot = structuredClone(state);
+      state.growthReport=null;state.growthHighlight=null;
       createSiegeState(state);
       return { ok: true };
     },
@@ -93,6 +96,17 @@ export function createGame(seed = CONFIG.seed) {
       return true;
     },
     tick() { step(); },
+    advancePrep(dt) {
+      if(state.phase!=='prep'||state.growthReport||!Number.isFinite(dt)||dt<0) return false;
+      state.prepTime+=dt;
+      if(state.growthHighlight&&state.prepTime>=state.growthHighlight.until) state.growthHighlight=null;
+      return true;
+    },
+    dismissGrowthReport() {
+      if(!state.growthReport) return false;
+      state.growthReport=null;
+      return true;
+    },
     stepSeconds(seconds) {
       if (!Number.isFinite(seconds) || seconds < 0) return false;
       const ticks = Math.round(seconds / SIM_DT);
@@ -113,21 +127,21 @@ export function createGame(seed = CONFIG.seed) {
       state.campaign.history.push(result);
       for(const key of Object.keys(state.campaign.totals)) state.campaign.totals[key]+=result[key];
       delete state.snapshot;
-      if(index===CONFIG.populationBySiege.length) {
+      if(index===CONFIG.campaignSieges) {
         state.phase='complete';state.campaign.complete=true;
         return true;
       }
       state.siegeIndex++;
-      state.population=CONFIG.populationBySiege[state.siegeIndex-1];
       state.prepGold=state.gold;
       state.phase='prep';
       state.time=0;state.tick=0;state.speed=1;
+      state.prepTime=0;
       state.enemies=[];state.arrows=[];state.explosions=[];
       state.schedule=[];state.spawnIndex=0;
       delete state.results;
       // Tower attack timers are battle-local; damage, rubble, and markers persist.
       for(const s of state.structures) {delete s.shotCooldown;}
-      createInhabitants(state);
+      growSettlement(state,result.tier);
       return true;
     },
     restartCampaign() { state = createCampaignState(seed); return true; },

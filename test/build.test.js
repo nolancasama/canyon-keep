@@ -5,7 +5,7 @@ import { MAP, KEEP, SITES } from '../src/data/map.js';
 import { damageStructure, structureAt, tileAt } from '../src/sim/grid.js';
 import { capacity, repairCost } from '../src/sim/build.js';
 import { nextStep, rebuildFlow } from '../src/sim/pathing.js';
-import { createGame, tileOf, crossing } from './helpers.js';
+import { createGame, tileOf, crossing, structure } from './helpers.js';
 
 test('terrain, occupancy, spawn buffer, and tower integration constrain placement', () => {
   const game = createGame();
@@ -57,7 +57,7 @@ test('line previews simulate sequential spending and release stops at available 
 });
 
 test('an already blocked road does not prohibit any ordinary construction tool', () => {
-  for (const type of ['wall', 'barricade', 'tower', 'house', 'farm']) {
+  for (const type of ['wall', 'barricade', 'tower']) {
     const game = createGame();
     game.state.population = 14;
     for (const {x,y} of crossing(5)) assert.equal(game.api.place('wall', x, y).ok, true);
@@ -86,75 +86,55 @@ test('damaged demolition refunds and prep repairs use specified rounding', () =>
   assert.equal(game.state.gold, before + refund);
 });
 
-test('houses and farms are always free and can only be built while the population needs them', () => {
-  const game = createGame();
-  assert.equal(game.api.civilianNeeded('house'), false);
-  assert.equal(game.api.civilianNeeded('farm'), false);
-  assert.match(game.api.preview('house', 52, 10).reason, /no house needed/);
-  assert.match(game.api.preview('farm', 52, 13).reason, /no farm needed/);
-  assert.equal(game.api.place('house', 52, 10).ok, false);
-  game.state.population = 14;
-  for (const [type, locations, finalCapacity] of [
-    ['house', [[52,10], [55,10]], 14],
-    ['farm', [[52,13], [55,13]], 18],
-  ]) {
-    const initialGold = game.state.gold;
-    for (const [x, y] of locations) {
-      assert.equal(game.api.price(type), 0);
-      assert.equal(game.api.civilianNeeded(type), true);
-      const result = game.api.place(type, x, y);
-      assert.equal(result.ok, true);
-      assert.equal(result.structure.paidCost, 0);
-      assert.equal(result.structure.cost, CONFIG.structures[type].cost, 'repair retains base price');
-    }
-    assert.equal(game.api.civilianNeeded(type), false);
-    assert.equal(game.api.place(type, 58, type === 'house' ? 10 : 13).ok, false, 'surplus is not buildable');
-    assert.equal(game.state.gold, initialGold);
-    assert.equal(game.api.capacity()[type === 'house' ? 'housing' : 'food'], finalCapacity);
-  }
-  assert.equal(game.api.canStart().ok, true);
-});
-
-test('damaged civilian buildings still provide capacity; destroyed ones can be replaced for free', () => {
-  for (const type of ['house', 'farm']) {
+test('civilian construction is unavailable to player placement, previews, and drag tools', () => {
+  for (const type of ['house', 'farm']) for (const population of [6, 14]) {
     const game = createGame();
-    game.state.population = 10;
-    const result = game.api.place(type, 52, 10);
-    assert.equal(result.ok, true);
-    const building = result.structure;
-    building.hp = 1;
-    assert.equal(game.api.civilianNeeded(type), false);
-    assert.equal(repairCost(building), Math.ceil(building.cost * CONFIG.repairRate * (building.maxHp - 1) / building.maxHp));
-    damageStructure(game.state, building, 1);
-    assert.equal(game.api.civilianNeeded(type), true);
-    assert.equal(game.api.capacity()[type === 'house' ? 'housing' : 'food'], 6);
-    assert.equal(game.api.canStart().ok, false);
-    assert.equal(game.api.place(type, 52, 10).structure.paidCost, 0);
+    game.state.population = population;
+    const before = structuredClone(game.state);
+    const preview = game.api.preview(type, 52, 10);
+    assert.equal(preview.valid, false);
+    assert.match(preview.reason, /settlement|civilian|authority|automatic/i);
+    assert.equal(game.api.place(type, 52, 10).ok, false);
+    const line = game.api.placeLine(type, 52, 10, 55, 10);
+    assert.equal(line.ok, false);
+    assert.match(line.reason, /settlement|civilian|authority|automatic/i);
+    assert.deepEqual(game.state, before);
   }
 });
 
-test('free civilian buildings can be moved repeatedly without spending or generating gold', () => {
-  const game = createGame();
-  game.state.population = 10;
-  const initial = game.state.gold;
-  for (const type of ['house', 'farm']) for (const [x, y] of [[52,10], [55,13], [58,10]]) {
-    assert.equal(game.api.place(type, x, y).ok, true);
-    assert.equal(structureAt(game.state, x, y).paidCost, 0);
-    assert.equal(game.api.demolish(x, y).refund, 0);
-    assert.equal(game.state.gold, initial);
+test('civilian buildings and keep resist all player demolition, repair, and replacement tools', () => {
+  for (const type of ['house', 'farm', 'keep']) for (const destroyed of [false, true]) {
+    const game = createGame();
+    const target = type === 'keep' ? game.state.structures[0] : structure(game.state, type, 52, 10);
+    target.hp = 1;
+    if (destroyed) damageStructure(game.state, target, 1);
+    const before = structuredClone(game.state);
+    assert.equal(game.api.demolish(target.x, target.y).ok, false);
+    assert.equal(game.api.repair(target.x, target.y).ok, false);
+    for (const replacement of ['wall', 'gate', 'tower', 'barricade']) {
+      assert.equal(game.api.preview(replacement, target.x, target.y).valid, false);
+      assert.equal(game.api.place(replacement, target.x, target.y).ok, false);
+    }
+    assert.deepEqual(game.state, before);
   }
 });
 
-test('required civilian infrastructure can be built with an empty treasury', () => {
-  const game = createGame();
-  game.state.population = 10;
-  game.state.gold = 0;
-  assert.equal(game.api.place('house', 52, 10).ok, true);
-  assert.equal(game.api.place('farm', 55, 10).ok, true);
-  assert.equal(game.state.gold, 0);
-  assert.equal(game.api.canStart().ok, true);
-  assert.equal(game.api.preview('house', 58, 10).valid, false);
-  assert.equal(game.api.preview('farm', 58, 13).valid, false);
+test('repair all charges for military repairs only and leaves civilian buildings and keep untouched', () => {
+  const game = createGame(), keep = game.state.structures[0];
+  const house = structure(game.state, 'house', 52, 10, 1);
+  const farm = structure(game.state, 'farm', 55, 10, 1);
+  keep.hp -= 100;
+  assert.equal(game.api.place('tower', 52, 13).ok, true);
+  const tower = structureAt(game.state, 52, 13);
+  tower.hp = 1;
+  const cost = repairCost(tower), gold = game.state.gold;
+  assert.equal(game.api.repairCost(), cost);
+  game.api.repairAll();
+  assert.equal(game.state.gold, gold - cost);
+  assert.equal(tower.hp, tower.maxHp);
+  assert.equal(house.hp, 1);
+  assert.equal(farm.hp, 1);
+  assert.equal(keep.hp, keep.maxHp - 100);
 });
 
 test('prep refunds return full paid wall/tower prices and half a damaged tower price', () => {
@@ -307,7 +287,7 @@ test('seeded intact place/demolish/replace sequences conserve gold plus recovera
     const [x, y] = slots[random(slots.length)];
     const existing = structureAt(game.state, x, y);
     if (!existing) {
-      const type = ['wall', 'tower', 'house', 'farm', 'barricade'][random(5)];
+      const type = ['wall', 'tower', 'barricade'][random(3)];
       if (game.api.place(type, x, y).ok) actions.place++;
     } else if (existing.type === 'wall' && random(2) === 0) {
       if (game.api.place('gate', x, y).ok) actions.replace++;
@@ -317,12 +297,12 @@ test('seeded intact place/demolish/replace sequences conserve gold plus recovera
   for (const count of Object.values(actions)) assert.ok(count > 0, 'sequence exercises each action');
 });
 
-test('capacity, prep-only construction, and one pendulum are enforced', () => {
+test('capacity remains informative while prep-only construction and one pendulum are enforced', () => {
   const game = createGame();
   assert.equal(capacity(game.state).housing, 6);
   assert.equal(capacity(game.state).food, 6);
   game.state.population = 7;
-  assert.equal(game.api.startSiege().ok, false);
+  assert.equal(game.api.canStart().ok, true, 'capacity shortages do not gate battle');
   game.state.population = 6;
   assert.equal(game.api.place('pendulum', SITES[0].x, SITES[0].y).ok, true);
   assert.equal(game.api.place('pendulum', SITES[1].x, SITES[1].y).ok, false);

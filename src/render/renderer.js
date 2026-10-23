@@ -37,6 +37,8 @@ export class Renderer {
       c.save();c.strokeStyle=`rgba(240,96,78,${.7+Math.sin(this.visualTime*4)*.3})`;c.fillStyle=`rgba(240,96,78,${.18+Math.sin(this.visualTime*4)*.1})`;c.lineWidth=3;for(const tile of ui.blockedRoadTiles||[])c.fillRect(tile.x*TILE,tile.y*TILE,TILE,TILE);
       for(const tile of ui.blockedRoadTiles||[])c.strokeRect(tile.x*TILE+1,tile.y*TILE+1,TILE-2,TILE-2);
       c.restore();
+      const highlight=state.growthHighlight;
+      if(highlight&&(state.prepTime??0)<highlight.until){c.save();c.strokeStyle=`rgba(242,218,143,${.6+Math.sin(this.visualTime*4)*.3})`;c.fillStyle=`rgba(242,218,143,${.08+Math.sin(this.visualTime*4)*.04})`;c.lineWidth=3;for(const s of state.structures)if(!s.destroyed&&s.hp>0&&highlight.ids.includes(s.id)){c.fillRect(s.x*TILE-2,s.y*TILE-2,s.w*TILE+4,s.h*TILE+4);c.strokeRect(s.x*TILE-2,s.y*TILE-2,s.w*TILE+4,s.h*TILE+4);}c.restore();}
     }
     for(const h of state.inhabitants||[])if(h.hp>0&&!h.sheltered)this.inhabitant(c,h,state);
     for(const e of [...(state.enemies||[])].filter(e=>e.hp>0&&!e.dead).sort((a,b)=>a.y-b.y))this.enemy(c,e,state);
@@ -158,5 +160,5 @@ export class Renderer {
     const labelX=q.x-Math.cos(s.centerAngle)*33,labelY=q.y-Math.sin(s.centerAngle)*33-44;
     c.fillStyle=p.status==='ready'?'#ffe1a1':'#c4d1bc';c.font='bold 9px system-ui';c.textAlign='center';c.fillText(p.status==='ready'?'TITAN · READY':p.status==='released'?'TITAN · RELEASED':`REWINDING · ${Math.ceil(p.resetRemaining??0)}s`,labelX,labelY);c.textAlign='left';
   }
-  preview(c,state,ui){if(state.phase!=='prep'||!ui.hover||!ui.tool)return;const cells=ui.previewCells||[];for(const cell of cells){const result=cell.result||cell,x=cell.x??ui.hover.x,y=cell.y??ui.hover.y,valid=result.valid??result.ok??false,w=ui.tool==='house'||ui.tool==='farm'?2:1;let color=valid?'#b0df9860':'#ed765966';if(ui.tool==='demolish')color='#f4ab6866';if(ui.tool==='repair')color='#8acbd966';c.fillStyle=color;c.fillRect(x*20,y*20,w*20,w*20);c.strokeStyle=valid?'#d6f6b5':'#ffc2a2';c.lineWidth=1.5;c.strokeRect(x*20+.75,y*20+.75,w*20-1.5,w*20-1.5);if(!valid&&ui.tool!=='demolish'&&ui.tool!=='repair'){line(c,x*20+6,y*20+6,x*20+14,y*20+14,'#ffd2b9',1.5);line(c,x*20+14,y*20+6,x*20+6,y*20+14,'#ffd2b9',1.5);}}}
+  preview(c,state,ui){if(state.phase!=='prep'||state.growthReport||!ui.hover||!ui.tool)return;const cells=ui.previewCells||[];for(const cell of cells){const result=cell.result||cell,x=cell.x??ui.hover.x,y=cell.y??ui.hover.y,valid=result.valid??result.ok??false;let color=valid?'#b0df9860':'#ed765966';if(ui.tool==='demolish')color='#f4ab6866';if(ui.tool==='repair')color='#8acbd966';c.fillStyle=color;c.fillRect(x*20,y*20,20,20);c.strokeStyle=valid?'#d6f6b5':'#ffc2a2';c.lineWidth=1.5;c.strokeRect(x*20+.75,y*20+.75,18.5,18.5);if(!valid&&ui.tool!=='demolish'&&ui.tool!=='repair'){line(c,x*20+6,y*20+6,x*20+14,y*20+14,'#ffd2b9',1.5);line(c,x*20+14,y*20+6,x*20+6,y*20+14,'#ffd2b9',1.5);}}}
 }

@@ -19,7 +19,8 @@ export function createSiegeState(state) {
   state.schedule = expandSchedule(state.siegeIndex);
   state.spawnIndex = 0;
   state.keepReached = false;
-  state.stats = { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false };
+  state.stats = { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false,
+    bountyGold: 0, bountyCounts: { foot: 0, chiseler: 0, powder: 0, boss: 0 } };
   createInhabitants(state);
   rebuildFlow(state);
   emit(state, 'siegeStarted', { siegeIndex: state.siegeIndex });

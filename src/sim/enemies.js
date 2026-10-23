@@ -25,11 +25,17 @@ export function damageEnemy(state,enemy,amount) {
   enemy.hp=Math.max(0,enemy.hp-amount);
   if(enemy.hp===0) {
     enemy.dead=true; enemy.attackPhase='dead';
+    const bounty=CONFIG.bounties[enemy.type];
+    state.gold+=bounty;
     if(state.stats) {
       state.stats.enemiesDefeated++;
+      state.stats.bountyGold=(state.stats.bountyGold??0)+bounty;
+      const counts=state.stats.bountyCounts??={};
+      counts[enemy.type]=(counts[enemy.type]??0)+1;
       if(enemy.type==='boss') state.stats.bossDefeated=true;
     }
     emit(state,'enemyDeath',{id:enemy.id,enemyType:enemy.type,x:enemy.x,y:enemy.y});
+    emit(state,'bounty',{id:enemy.id,enemyType:enemy.type,x:enemy.x,y:enemy.y,amount:bounty});
     if(enemy.type==='powder') queueExplosion(state,enemy);
   }
   return true;

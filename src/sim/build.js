@@ -1,10 +1,11 @@
 import { CONFIG } from '../config.js';
 import { SITES, SPAWNS, WIDTH } from '../data/map.js';
 import { tileAt, structureAt, isWalkable, emit } from './grid.js';
-import { homeInhabitants } from './inhabitants.js';
 
 const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const failure = (reason, cost = 0) => ({ valid: false, ok: false, reason, cost });
+const clientOwned = s => s && ['keep', 'house', 'farm'].includes(s.type);
+const clientReason = 'The settlement owns houses, farms and the keep; player tools cannot change them';
 
 function supported(state, tower, excludedId = null) {
   return ORTHOGONAL.some(([dx, dy]) => {
@@ -54,17 +55,7 @@ export function blockedRoadTiles(state) {
 export function price(state, type) {
   const def = CONFIG.structures[type];
   if (!def) return 0;
-  // Houses and farms are free settlement requirements (see DESIGN_DECISIONS).
-  if (type === 'house' || type === 'farm') return 0;
   return def.cost;
-}
-
-// Houses and farms may only be built while the population still needs them.
-export function civilianNeeded(state, type) {
-  const totals = capacity(state), population = state.population ?? CONFIG.population;
-  if (type === 'house') return totals.housing < population;
-  if (type === 'farm') return totals.food < population;
-  return true;
 }
 
 export function refundValue(structure) {
@@ -74,12 +65,13 @@ export function refundValue(structure) {
 }
 
 export function placement(state, type, x, y, { line = false } = {}) {
+  if (['keep', 'house', 'farm'].includes(type)) return failure(clientReason);
   const def = CONFIG.structures[type];
   if (!def || type === 'keep') return failure('Select a construction tool');
   const cost = price(state, type);
   if (state.phase !== 'prep') return failure('Construction is available during preparation', cost);
   if (!Number.isInteger(x) || !Number.isInteger(y)) return failure('Choose a map tile', cost);
-  if (!civilianNeeded(state, type)) return failure(type === 'house' ? 'Housing is sufficient; no house needed' : 'Food is sufficient; no farm needed', cost);
+  if (state.structures.some(s => clientOwned(s) && x < s.x+s.w && x+def.w > s.x && y < s.y+s.h && y+def.h > s.y)) return failure(clientReason, cost);
   const existing = structureAt(state, x, y);
   const interchangeable = (type === 'gate' && existing?.type === 'wall') ||
     (type === 'wall' && existing?.type === 'gate');
@@ -132,7 +124,7 @@ export function place(state, type, x, y, options) {
     state.rubble = (state.rubble ?? []).filter(r => !(r.x === x && r.y === y));
   }
   state.gold -= check.cost;
-  if (type === 'house') homeInhabitants(state);
+  state.growthHighlight = null;
   emit(state, 'build', { structureId: id, typeOfStructure: type, x, y });
   return { ...check, structure };
 }
@@ -164,6 +156,7 @@ export function previewLine(state, type, x0, y0, x1, y1) {
 }
 
 export function placeLine(state, type, x0, y0, x1, y1) {
+  if (['keep', 'house', 'farm'].includes(type)) return failure(clientReason);
   if (!['wall', 'gate', 'barricade'].includes(type)) return failure('This tool places one building at a time');
   const results = [];
   for (const { x, y } of lineTiles(x0, y0, x1, y1)) {
@@ -180,7 +173,8 @@ export function demolish(state, x, y) {
   const pendulum = state.pendulum?.x === x && state.pendulum?.y === y ? state.pendulum : null;
   const target = pendulum ?? structureAt(state, x, y) ?? state.structures.find(s =>
     (s.destroyed || s.hp <= 0) && x >= s.x && y >= s.y && x < s.x + s.w && y < s.y + s.h);
-  if (!target || target.type === 'keep') return failure('Choose a player structure');
+  if (clientOwned(target)) return failure(clientReason);
+  if (!target) return failure('Choose a player structure');
   if (!pendulum && (target.type === 'wall' || target.type === 'gate')) {
     if (state.structures.some(s => !s.destroyed && s.type === 'tower' && tileAt(s.x, s.y) !== 'C' && supported(state, s) &&
       !supported(state, s, target.id))) return failure('Would leave a canyon tower unsupported');
@@ -190,13 +184,13 @@ export function demolish(state, x, y) {
   else state.structures.splice(state.structures.indexOf(target), 1);
   state.rubble = (state.rubble ?? []).filter(r => r.id !== target.id);
   state.gold += refund;
-  if (target.type === 'house') homeInhabitants(state);
   state.flowRevision = (state.flowRevision ?? 0) + 1;
   emit(state, 'demolish', { structureId: target.id, x, y, refund });
   return { ok: true, valid: true, reason: '', refund };
 }
 
 export function repairCost(structure) {
+  if (clientOwned(structure)) return 0;
   if (!structure || structure.destroyed || structure.hp <= 0) return 0;
   return Math.ceil(structure.cost * CONFIG.repairRate * (structure.maxHp - structure.hp) / structure.maxHp);
 }
@@ -204,6 +198,8 @@ export function repairCost(structure) {
 export function repair(state, x, y) {
   if (state.phase !== 'prep') return failure('Repair during preparation only');
   const target = structureAt(state, x, y);
+  const reserved = state.structures.find(s => clientOwned(s) && x >= s.x && y >= s.y && x < s.x+s.w && y < s.y+s.h);
+  if (reserved) return failure(clientReason);
   if (!target) return failure('Choose a damaged structure');
   const cost = repairCost(target);
   if (state.gold < cost) return failure('Not enough gold', cost);
@@ -217,7 +213,7 @@ export function repairAll(state) {
   const cost = state.structures.reduce((n, s) => n + repairCost(s), 0);
   if (state.gold < cost) return failure('Not enough gold', cost);
   state.gold -= cost;
-  for (const s of state.structures) if (!s.destroyed && s.hp > 0) s.hp = s.maxHp;
+  for (const s of state.structures) if (!clientOwned(s) && !s.destroyed && s.hp > 0) s.hp = s.maxHp;
   return { ok: true, valid: true, reason: '', cost };
 }
 
@@ -232,14 +228,8 @@ export function capacity(state) {
 }
 
 export function readiness(state) {
-  const { housing, food } = capacity(state);
-  const population = state.population ?? CONFIG.population;
-  const houses = Math.max(0, Math.ceil((population - housing) / CONFIG.structures.house.housing));
-  const farms = Math.max(0, Math.ceil((population - food) / CONFIG.structures.farm.food));
   const road = hasTradeRoad(state);
   return [
-    { id: 'housing', ok: houses === 0, message: houses ? `Build ${houses} additional ${houses === 1 ? 'house' : 'houses'}.` : 'Housing sufficient' },
-    { id: 'food', ok: farms === 0, message: farms ? `Build ${farms} additional ${farms === 1 ? 'farm' : 'farms'}.` : 'Food sufficient' },
     { id: 'tradeRoad', ok: road, message: road ? 'Castle entrance accessible' : 'Castle entrance blocked. Install a gate to create a route to the keep.' },
   ];
 }

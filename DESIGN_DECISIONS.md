@@ -267,3 +267,114 @@ NEEDED") unless housing/food is short of the population. Still prevents free
 2×2 blockers being spammed as walls, since you can only build as many as the
 population requires. Moving one is free: demolish (refund 0) re-opens the need.
 Rejected: always free anywhere (free walls), always free but basin-only.
+
+## 2026-10-23 — Fortress Engineer update (user brief, controller-frozen design)
+
+The player is a hired defense engineer. Gold is the military budget only;
+the settlement (houses, farms, inhabitants) belongs to the client and grows by
+itself. This supersedes the "houses/farms free while needed" entries above
+(those rules existed because the player built civilian buildings; they no
+longer do). Already shipped before this brief and kept as-is: full prep
+refunds scaled by HP, sealed walls, road check at Start Siege, ledge removal,
+wall↔gate swaps, the Start Siege advisory.
+
+Controller modifications to the brief, with reasons:
+
+- **Kill bounties replace the results-screen boss bonus** (foot 2, chiseler 3,
+  powder 5, boss 100). Paying both would double the boss reward. Completion
+  bonuses and the payout floor are lowered so that the reference campaign's
+  treasury entering S2 and S3 stays within ±10% of the pre-bounty values —
+  bounties shift income toward good defense without inflating budgets.
+- **Siege 1 settlement stays keep-only (6 inhabitants).** The compact start is
+  the brief's own example and preserves tested S1 balance.
+- **Performance rating 0–100**, all from the siege: inhabitants surviving 40,
+  keep HP remaining 30, civilian buildings intact 20, no enemy reached the keep
+  10. Tiers: <80 standard (1 house, 1 farm), 80–94 strong (2, 2), ≥95
+  exceptional (3, 2). Unspent gold is not a factor.
+- **Population = keep 6 + 4 per house.** On Continue the authority first
+  rebuilds destroyed houses/farms for free (lost inhabitants are replaced by
+  new settlers), then adds growth buildings. An extra farm is added if food
+  would fall short; capacity therefore never needs player action, and the
+  housing/food readiness checks are removed. The road is the only blocking
+  readiness requirement.
+- **Inside/outside is computed, not read from the 'C' marker:** flood fill from
+  the spawns over walkable tiles; every living military blocker (wall family,
+  gate, tower, barricade) stops the fill; civilian buildings do not. Unreached
+  tiles are inside. With no walls, everything is outside.
+- **Growth planner is deterministic, no RNG.** 2×2 sites on floor/castle tiles,
+  ≥7 columns from the spawn edge, never overlapping any structure, pendulum
+  site or a built pendulum's strike band, one tile of clearance from military
+  structures, and each placement must keep the trade road open. Houses take
+  the site nearest (BFS from the keep) to existing habitation; farms take the
+  nearest site at least one ring further out with the most open neighbours.
+  Ties break by (y, x). On an exceptional rating at least one new building
+  goes to the best outside site if one exists. Too little space → place what
+  fits and report the shortage; never overlap or demolish.
+- **Civilian buildings are untouchable by player tools** (no place over,
+  demolish, replace). Player House/Farm tools are removed.
+- **Wall family:** wall, gate, spiked wall, golem wall, launcher, retractable
+  wall replace one another atomically in prep for new price minus the old
+  piece's HP-scaled refund (the existing gate-swap code path, generalized).
+  Wall, gate, spiked, golem and launcher support canyon towers; retractable
+  does not (it is usually open).
+- **Spiked wall** 35 G, 170 HP; every enemy attacking it in melee takes 12 dps.
+- **Golem wall** 90 G, 240 HP. At ≤50% HP it opens (tile becomes open floor,
+  flow field rebuilt) and a golem emerges: 350 HP, 35 damage area slam
+  (radius 1.2) every 1.2 s with 1-tile knockback and 0.8 s stun, leashed to 3.5
+  tiles of its wall, crumbles after 30 s or at 0 HP. Enemies can attack it.
+  No refund once awakened. It is an emergency defender, never an army.
+- **Proximity sensor** 15 G, 1×1, non-blocking, never targeted, radius 1.5
+  tiles, configurable delay 0 / 0.5 / 1 / 2 s, 6 s cooldown, links up to 3
+  devices. Devices are activated through one mechanism dispatcher
+  (`activate(state, device)` by type) so new triggers/devices plug in.
+- **Launcher** 70 G, 200 HP, wall-family, facing N/E/S/W set at placement
+  (rotate key / panel). It fires only when a linked trigger activates it:
+  volley of 3 piercing bolts 0.25 s apart, 30 damage per enemy, range 12 tiles,
+  stopped by cliffs and blocking structures; 5 s cooldown. Rejected:
+  auto-firing when an enemy is in the lane — it would make sensors pointless.
+  Unlinked mechanisms produce a non-blocking advisory warning.
+- **Retractable wall** 45 G, 200 HP while raised; starts lowered (walkable,
+  ignored by road check and pathing). On activation: rises over 0.4 s, holds 8
+  s, lowers over 0.4 s, 6 s cooldown. If any unit is within 0.6 tiles of the
+  tile centre it waits; still blocked after 1.5 s → that activation is
+  skipped. Raise/lower rebuilds the flow field. Since it always lowers again,
+  no permanent deadlock.
+- **Sequencing:** milestones commit separately after tests and controller
+  review: (1) bounties + settlement growth, (2) spiked/golem walls + palette,
+  (3) sensor/launcher/linking, then retractable walls, (4) scout reports,
+  pendulum polish, balance, docs.
+
+## 2026-10-23 — Fortress Engineer milestone 1 implementation decisions
+
+- Completion rewards are 188/238/50 G and the payout floor is 100 G. Each
+  completion reduction offsets that siege's regular-enemy bounties; the boss's
+  100 G moves from results to battle. The measured reference prep treasuries
+  remain S2 615 → 615 G and S3 1010 → 1010 G (0% change). Reference payouts
+  become 363/463/275 G plus 212/312/450 G earned in battle. Defensive fixture
+  positions are unchanged; only its obsolete house/farm placement actions go away.
+- Growth distance ranking uses terrain BFS independent of structures, allowing
+  outside sites to be ranked across a closed wall/gate ring. Houses minimize
+  distance to existing keep/house footprints; farms choose the nearest keep-BFS
+  ring beyond habitation, then most open neighbours. Final ties use (y,x).
+  Exceptional growth reserves an outside house first so later placements cannot
+  consume the only outside site. Existing rubble footprints remain reserved;
+  rebuilding them later cannot conflict with automatic growth.
+- Client ownership includes damaged/destroyed civilian footprints and keep
+  repairs; Repair all therefore only changes military structures. Destroyed
+  civilian buildings are restored on Continue before new growth. If an externally
+  constructed state obstructs rebuilding, the report records that shortage
+  rather than modifying military structures or overlapping buildings.
+- The growth overlay is represented by `state.growthReport` during `prep`.
+  Dismissal clears the report; the eight-second highlight timer advances only
+  during visible preparation via `advancePrep(dt)`. API preparation remains
+  callable for headless fixtures. Start snapshots the grown prep exactly;
+  retries restore that snapshot without invoking growth or replaying gold labels.
+
+## 2026-10-23 — Growth judges the player's intended perimeter (controller review)
+
+Inside/outside classification, military clearance and the planner's road check
+treat breached (destroyed, not demolished) military pieces as still standing.
+Why: growth runs right after battle, before the player repairs; with live-only
+blockers one breach made the whole keep "outside", and a house could be placed
+in a gap that blocks the road once the wall is rebuilt (seen in review: the
+reference campaign could not start Siege 2). Gates stay road-passable.

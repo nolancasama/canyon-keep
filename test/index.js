@@ -8,3 +8,6 @@ import './combat.test.js';
 import './siege.test.js';
 import './campaign.test.js';
 import './campaign-reference.test.js';
+import './settlement.test.js';
+import './effects.test.js';
+import './bounties.test.js';

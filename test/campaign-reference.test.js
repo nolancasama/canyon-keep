@@ -5,7 +5,8 @@ import { createGame } from './helpers.js';
 import { expandSchedule, SIEGES } from '../src/data/sieges.js';
 import { CONFIG } from '../src/config.js';
 import { applyReferenceBuild } from './fixtures/reference-build.js';
-import { CAMPAIGN_ADDITIONS, simulateCampaign } from './fixtures/campaign-reference.js';
+import { simulateCampaign } from './fixtures/campaign-reference.js';
+import { growSettlement } from '../src/sim/settlement.js';
 
 test('Sieges 2 and 3 have escalating breach packs, continuous arrivals and late bosses',()=>{
   for(const index of [2,3]) {
@@ -20,9 +21,13 @@ test('Sieges 2 and 3 have escalating breach packs, continuous arrivals and late 
 
 test('an affordable expanding campaign wins all three sieges without a pendulum and repeats exactly',()=>{
   const first=simulateCampaign(createGame);
-  for(const report of first.reports) console.log(`Campaign Siege ${report.siege}: payout=${report.payout}, structuresDestroyed=${report.structuresDestroyed}, keepDamage=${report.keepDamage}, duration=${report.time.toFixed(1)}s`);
+  for(const report of first.reports) console.log(`Campaign Siege ${report.siege}: enteringPrep=${first.game.state.campaign.history[report.siege-2]?.treasuryAfter??CONFIG.startingGold}, payout=${report.payout}, structuresDestroyed=${report.structuresDestroyed}, keepDamage=${report.keepDamage}, duration=${report.time.toFixed(1)}s`);
   assert.equal(first.game.state.phase,'complete',JSON.stringify(first.reports));
   assert.equal(first.reports.length,3);
+  for(const [i,baseline] of [[0,615],[1,1010]]) {
+    const actual=first.game.state.campaign.history[i].treasuryAfter;
+    assert.ok(actual>=baseline*.9&&actual<=baseline*1.1,`entering S${i+2}: ${actual} G vs pre-bounty ${baseline} G`);
+  }
   assert.ok(first.reports.every(r=>r.phase==='victory'&&r.goldBefore>=0));
   assert.equal(first.game.state.pendulum,null);
   assert.deepEqual(first.game.state.campaign.rewardedSieges,[1,2,3]);
@@ -32,19 +37,15 @@ test('an affordable expanding campaign wins all three sieges without a pendulum 
   assert.equal(hash(first.game.state),hash(second.game.state));
 });
 
-test('the unchanged Siege 1 defenses lose Siege 3 even with mandatory civilian capacity',()=>{
+test('the unchanged Siege 1 defenses lose Siege 3 even with automatic settlement growth',()=>{
   const game=createGame(123456);
   applyReferenceBuild(game);
-  // Isolate layout adequacy from economy: the only added buildings are the
-  // mandatory two houses and farms; defensive positions and HP stay unchanged.
+  // Isolate layout adequacy from economy: only civilian growth is added;
+  // defensive positions and HP stay unchanged.
   game.state.siegeIndex=3;
-  game.state.population=CONFIG.populationBySiege[2];
-  game.state.gold=2*(CONFIG.structures.house.cost+CONFIG.structures.farm.cost);
-  for(const index of [2,3]) for(const {type,x,y} of CAMPAIGN_ADDITIONS[index].filter(s=>s.type==='house'||s.type==='farm')) {
-    const placed=game.api.place(type,x,y);
-    assert.equal(placed.ok,true,`HARNESS_PRECONDITION_FAILED: ${type} ${x},${y}: ${placed.reason}`);
-  }
-  assert.equal(game.api.startSiege().ok,true,'HARNESS_PRECONDITION_FAILED: S3 civilian capacities');
+  growSettlement(game.state,'exceptional');
+  growSettlement(game.state,'exceptional');
+  assert.equal(game.api.startSiege().ok,true,'HARNESS_PRECONDITION_FAILED: S3 trade road');
   game.api.stepSeconds(420);
   assert.equal(game.state.phase,'defeat',JSON.stringify({phase:game.state.phase,keep:game.state.structures[0].hp,boss:game.state.enemies.find(e=>e.type==='boss')?.hp,stats:game.state.stats}));
 });
