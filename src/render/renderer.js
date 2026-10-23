@@ -33,6 +33,7 @@ export class Renderer {
     for(const m of state.attackMarkers||[]){line(c,m.x*TILE-5,m.y*TILE-5,m.x*TILE+5,m.y*TILE+5,'#b7624e99',2);line(c,m.x*TILE+5,m.y*TILE-5,m.x*TILE-5,m.y*TILE+5,'#b7624e99',2);}
     this.overlays(c,state,ui);
     for(const s of state.structures||[])if(!s.destroyed&&s.hp>0)this.structure(c,s,state);
+    this.mechanismLinks(c,state,ui);
     this.sweepWarnings(c,state,ui);
     if(state.phase==='prep'){
       c.save();c.strokeStyle=`rgba(240,96,78,${.7+Math.sin(this.visualTime*4)*.3})`;c.fillStyle=`rgba(240,96,78,${.18+Math.sin(this.visualTime*4)*.1})`;c.lineWidth=3;for(const tile of ui.blockedRoadTiles||[])c.fillRect(tile.x*TILE,tile.y*TILE,TILE,TILE);
@@ -118,13 +119,25 @@ export class Renderer {
   }
   overlays(c,state,ui){
     const prep=state.phase==='prep';
-    for(const sensor of state.structures)if(sensor.type==='sensor'&&!sensor.destroyed&&sensor.hp>0){const x=(sensor.x+.5)*TILE,y=(sensor.y+.5)*TILE,selected=ui.selectedSensorId===sensor.id,flash=sensor.flashRemaining>0;if(prep){c.save();c.fillStyle=selected?'#98d7b61c':'#98d7b60b';c.strokeStyle=selected?'#c2e8c080':'#a5ceac38';c.lineWidth=1;c.beginPath();c.arc(x,y,CONFIG.sensor.radius*TILE,0,TAU);c.fill();c.stroke();if(selected){c.strokeStyle='#ffe3a0';c.strokeRect(sensor.x*TILE-2,sensor.y*TILE-2,TILE+4,TILE+4);}c.restore();}if(prep||flash){c.save();c.globalAlpha=flash?.95:selected?.8:.35;c.setLineDash([4,5]);c.lineDashOffset=flash?-this.visualTime*30:0;for(const id of sensor.links||[]){const device=state.structures.find(d=>d.id===id&&!d.destroyed&&d.hp>0);if(!device)continue;const tx=(device.x+.5)*TILE,ty=(device.y+.5)*TILE;line(c,x,y,tx,ty,flash?'#ffe4a0':'#b0c5a0',flash?2:1);c.setLineDash([]);const count=Math.max(1,Math.floor(Math.hypot(tx-x,ty-y)/65));for(let i=1;i<=count;i++){const f=i/(count+1),gx=x+(tx-x)*f,gy=y+(ty-y)*f;circle(c,gx,gy,3,'#34483d');for(let a=0;a<4;a++){const angle=a*TAU/4;line(c,gx+Math.cos(angle)*2,gy+Math.sin(angle)*2,gx+Math.cos(angle)*4,gy+Math.sin(angle)*4,flash?'#ffe4a0':'#b0c5a0',1);}circle(c,gx,gy,1,'#c3c8a0');}c.setLineDash([4,5]);}c.restore();}}
+    if(prep)for(const sensor of state.structures)if(sensor.type==='sensor'&&!sensor.destroyed&&sensor.hp>0){const x=(sensor.x+.5)*TILE,y=(sensor.y+.5)*TILE,selected=ui.selectedSensorId===sensor.id;c.save();c.fillStyle=selected?'#98d7b61c':'#98d7b60b';c.strokeStyle=selected?'#c2e8c080':'#a5ceac38';c.lineWidth=1;c.beginPath();c.arc(x,y,CONFIG.sensor.radius*TILE,0,TAU);c.fill();c.stroke();if(selected){c.strokeStyle='#ffe3a0';c.strokeRect(sensor.x*TILE-2,sensor.y*TILE-2,TILE+4,TILE+4);}c.restore();}
     const highlight=state.phase==='prep'&&(ui.tool==='pendulum'||hoveredMount(ui));
     for(const s of shownSweeps(state,ui))this.sweepZone(c,s,highlight?.25:state.phase==='siege'?.065:.13,state);
     if(ui.hover){const tower=state.structures.find(s=>!s.destroyed&&s.type==='tower'&&s.x===ui.hover.x&&s.y===ui.hover.y);if(tower||ui.tool==='tower'&&state.phase==='prep'){const x=(ui.hover.x+.5)*20,y=(ui.hover.y+.5)*20;c.fillStyle='#afd5c116';c.strokeStyle='#cce0c18a';c.lineWidth=1;c.beginPath();c.arc(x,y,CONFIG.tower.range*TILE,0,TAU);c.fill();c.stroke();}}
     if(ui.hover&&state.phase==='siege'){
       const e=state.enemies.find(e=>e.hp>0&&Math.hypot(e.x-ui.hover.x-.5,e.y-ui.hover.y-.5)<1);
       if(e){const target=state.structures.find(s=>s.id===e.attackTargetId),p=target?{x:target.x+(target.w||1)/2,y:target.y+(target.h||1)/2}:e.walkTarget?{x:e.walkTarget.x+.5,y:e.walkTarget.y+.5}:null;if(p){c.save();c.setLineDash([3,3]);line(c,e.x*TILE,e.y*TILE,p.x*TILE,p.y*TILE,'#f4d5a3',1);c.setLineDash([]);c.strokeStyle='#edb888';c.beginPath();c.arc(p.x*TILE,p.y*TILE,target?13:4,0,TAU);c.stroke();c.restore();}}
+    }
+  }
+  mechanismLinks(c,state,ui){
+    const prep=state.phase==='prep';
+    for(const sensor of state.structures)if(sensor.type==='sensor'&&!sensor.destroyed&&sensor.hp>0&&(prep||sensor.flashRemaining>0)){
+      const x=(sensor.x+.5)*TILE,y=(sensor.y+.5)*TILE,selected=ui.selectedSensorId===sensor.id,flash=!prep&&sensor.flashRemaining>0;
+      c.save();c.globalAlpha=flash?1:selected?.92:.67;c.lineCap='round';
+      for(const id of sensor.links||[]){const device=state.structures.find(d=>d.id===id&&!d.destroyed&&d.hp>0);if(!device)continue;const tx=(device.x+.5)*TILE,ty=(device.y+.5)*TILE,dx=tx-x,dy=ty-y,length=Math.hypot(dx,dy),color=flash?'#fff0ae':selected?'#f0d49b':'#c2a474';
+        c.setLineDash([7,5]);line(c,x,y,tx,ty,'#252b25',4);line(c,x,y,tx,ty,color,2);c.setLineDash([]);
+        for(const [gx,gy]of [[x,y],[tx,ty]]){circle(c,gx,gy,4,'#26342f');for(let a=0;a<4;a++){const angle=a*TAU/4;line(c,gx+Math.cos(angle)*3,gy+Math.sin(angle)*3,gx+Math.cos(angle)*5,gy+Math.sin(angle)*5,color,1.5);}circle(c,gx,gy,2,color);circle(c,gx,gy,.8,'#344037');}
+        if(flash&&length){const progress=Math.min(1,1-sensor.flashRemaining/CONFIG.sensor.flashDuration),tail=Math.max(0,progress-.22);line(c,x+dx*tail,y+dy*tail,x+dx*progress,y+dy*progress,'#fff9da',4);}
+      }c.restore();
     }
   }
   mount(c,s,p,selected){const q=center(s);if(!p){c.save();c.globalAlpha=selected?1:.6;c.strokeStyle=selected?'#f4ce79':'#b6b18a';c.lineWidth=1;c.setLineDash([3,3]);c.beginPath();c.arc(q.x,q.y,13,0,TAU);c.stroke();c.setLineDash([]);line(c,q.x-6,q.y,q.x+6,q.y,'#e7ce8e',2);line(c,q.x,q.y-6,q.x,q.y+6,'#e7ce8e',2);c.fillStyle='#e0cd98';c.font='9px system-ui';c.textAlign='center';c.fillText(`TITAN ${s.id}`,q.x,q.y-21);c.textAlign='left';c.restore();}}

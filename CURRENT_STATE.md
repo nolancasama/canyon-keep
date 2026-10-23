@@ -1,8 +1,8 @@
 # Current State
 
 ## Status
-Fortress Engineer milestones 1–3 implemented: bounties, settlement growth,
-spiked/golem walls, trigger mechanisms, generalized wall-family exchange and a categorized palette,
+Fortress Engineer milestones 1–4 implemented: bounties, settlement growth,
+spiked/golem walls, trigger mechanisms, scout intel, impact feedback and balance fixtures,
 on the playable three-siege prototype. Headless validation passes;
 controller behavioral acceptance and aesthetic review of this update are pending.
 Work remains uncommitted. Controller behavioral acceptance is not performed here.
@@ -36,14 +36,23 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
 - Itemized victory/defeat results, every reward and penalty, minimum payout,
   treasury after payout, inspection, Continue, exact pre-siege retry and restart.
   Each enemy pays a bounty once immediately: foot 2, chiseler 3, powder 5,
-  boss 100 G, with nearby kills grouped into floating gold feedback. Results
-  show bounties as already earned, plus rating/tier. Completion is 188/238/50 G,
+  boss 100 G, with nearby kills grouped within 0.35 render seconds/two tiles,
+  including batched multi-second steps. Measured labels stack vertically and
+  larger sums have a slightly larger font. Results
+  show bounties as already earned with readable per-type counts, plus rating/tier. Completion is 188/238/50 G,
   payout floor 100 G, with no separate boss bonus. Continue applies only payout
   and preserves military damage; after the third Continue, campaign completion
-  displays totals and the final rating, without further growth.
+  displays total bounties and the final contract rating, without further growth.
+- Each prep opens a data-backed four-bullet scout report, after settlement growth
+  on S2/S3. Intel describes actual enemy counts, escalating chiselers, clustered
+  powder and the giant brute without exact spawn times. Dismiss to build; the
+  prep footer reopens it. Esc/Enter dismisses the visible report. Growth's visual
+  highlight clock pauses while scout intel covers the map.
 - Titan's Pendulum manual release, friendly damage, cooldown, ready pulse and
   recharge ring. Enlarged timber/iron A-frame, anchors, rotating ratchet drum,
-  double chains, spiked hammer and stronger swing smear.
+  double chains, spiked hammer and stronger swing smear. Hit-driven dust/debris,
+  capped shared shake and stronger flashes for pendulum-triggered powder chains
+  observe existing events without changing damage or collision.
 - Cached organic cliff contours and fractured angular rock plates/cracks with
   brighter lips and deep shading. Clear amber strike bands follow the same
   visual contour; orange intersections warn of friendly structure damage.
@@ -85,7 +94,9 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
   at 1366×768. Mechanisms includes Sensor, Launcher, Retractable Wall and Link.
   Keys 8/9/0/L select them; contextual R rotates launchers or selects Repair.
   Link selects sensors/toggles devices; the sensor panel lists links, delay and
-  readiness. Prep circles and dashed gear-dot linkage lines flash when firing.
+  readiness. Prep links draw above structures as outlined 2px iron chains at 67%
+  opacity, with endpoint rivets and selected-sensor emphasis. Battle hides links
+  except for a brief bright traveling pulse when the sensor fires.
 - The Start Siege advisory shows road readiness. Blocked-road hints pulse on
   bordering blocking wall-family pieces/barricades; previews show family net replacement prices.
   Empty sensors and unlinked devices add advisory warnings without disabling Start.
@@ -98,8 +109,14 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
 mutation. `api.phase()` retains its phase-string interface. Campaign observations:
 - `state.phase`: `prep`, `siege`, `victory`, `defeat`, `complete`.
 - `state.siegeIndex`, `population`, `prepGold`, `gold`.
+- `state.scoutReport`: null when dismissed; otherwise `{siegeIndex, bullets}`.
+  `api.openScoutReport()` / `dismissScoutReport()` are prep-only presentation
+  actions. Growth takes visual precedence when both reports are pending; phase
+  remains `prep`, and the headless build API remains available. API retry restores
+  the snapshot exactly; the UI retry action reopens scout intel explicitly.
 - `state.results`: per-siege counts, bonuses, penalties, raw payout, payout,
-  `floorApplied`, keep damage, treasury after payout, `bountyGold`, `rating`, `tier`.
+  `floorApplied`, keep damage, treasury after payout, `bountyGold`, `bountyCounts`,
+  `rating`, `tier`. Campaign bounty totals are summed from immutable result history.
 - `state.stats.bountyGold`, `bountyCounts` (foot/chiseler/powder/boss); `bounty`
   events expose `entityId`, `enemyType`, `x`, `y`, `amount` and sim timestamp `t`.
 - Growth's semantic state is observable through `state.growthReport` (null when
@@ -154,47 +171,46 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
-`npm test`: milestone 3 stage 1 **91 passed, 0 failed**; final **103 passed, 0 failed**.
-Milestone 3 adds 23 headless tests for registry dispatch, sensor enemy/boss
-detection, delay and standing-presence cooldown, inhabitants ignored, link
-limits/toggles/cleanup, mixed-device activation, advisory readiness, directional
-three-bolt cadence, piercing width/range, cliff/wall obstruction, dynamically
-raised blockers ahead/behind bolts, bounties, unlinked inactivity, sensor
-walkability/enclosure/road/immunity, explosion damage-slot immunity, exact
-retry and cross-siege configuration, retractable rise/hold/lower/cooldown,
-enemy/inhabitant/golem fail-safe, interrupted rises and corner occupancy,
-no enemy inside a raised tile, synchronous flow/target updates, raised-wall
-damage/rubble, lowered resets, HP-scaled exchanges and tower-support refusal.
-No implementation test failures or repair reruns were needed.
-Syntax checks (`node --check`) passed for src/ui/interface.js,
-src/render/renderer.js and src/ui/audio.js; no build step exists.
-Coverage includes once-only bounty accounting (boss, powder chains, pendulum),
-informational results totals, exact treasury rollback, client structure/tool
-protection, free rebuilds, weighted rating, deterministic growth, outside-wall
-exceptional growth, no overlap/cliffs, military clearance, pendulum avoidance,
-road preservation, shortages, extra food, report/highlight lifecycle and retry
-without duplicate settlement growth. Milestone 2 adds intact/half-damaged family
-exchanges, affordability and line totals/stops, support and road hints, spike
-damage/bounties, once-only threshold awakening, immediate opened-tile flow and
-enemy movement, golem leash/slams/knockback/stun/bounties, enemy targeting through
-open routes, blocker fallback, lifetime/HP crumble and exact retry restoration.
-Enemy pursuit discards obsolete breach steps so crumbling golems release their
-attackers back onto the current flow route.
-Area-damage coverage also verifies neighboring walls both awaken when a powder
-blast or boss slam removes structures during iteration.
-The affordable campaign reference still wins all three sieges deterministically
-without a pendulum; unchanged Siege 1 defenses still lose Siege 3 with growth.
-Military fixture positions are unchanged; obsolete civilian placements were removed.
-Latest reference entering-prep treasuries: S2 **615 G**, S3 **965 G**.
-Battle bounties remain 212/312/450 G; results payouts are 363/418/100 G.
-Siege durations are 219.4/250.9/274.7 seconds, with 180/2000 keep HP after S3.
-No browser suites, controller acceptance checks or screenshots were run/produced
-for this update. UI layout and aesthetics remain for controller review.
+Final milestone 4 `npm test`: **110 passed, 0 failed**. Earlier development
+runs exposed retry snapshot expectations and effects tests while those changes
+were in progress; the integrated final run has no remaining failures.
+`node --check src/ui/interface.js` and `node --check src/render/renderer.js`
+also pass. No dependencies or build step.
+
+New coverage includes render-time merge windows across frames and multi-second
+batches, measured bounty-label separation and font scaling, capped shared
+shake/particles, stronger pendulum powder-chain flashes, scout report lifecycle,
+mechanical S1 viability and repair-only campaign growth/readiness/overlap checks.
+Existing deterministic mechanics, growth, bounties and campaign coverage remains.
+
+| S1 build | Cost | Outcome | Keep HP lost | Bounties |
+|---|---:|---|---:|---:|
+| Reference | 1000 G | Victory | 1300 | 212 G |
+| Mechanical trap | 750 G | Victory | 0 | 212 G |
+
+The mechanical fixture uses three towers, spiked walls, a golem wall and a
+sensor-controlled launcher; spike-hit, golem-awaken and sensor-fire events all
+occur. No combat/economy tuning was needed. The repair-only initial campaign
+layout wins S1 (zero keep damage, 212 G bounty), grows into a playable S2 with
+the restored road open and no overlaps, then loses S2 (2000 keep damage, 212 G
+bounty). It does not earn another growth transition; no defensive extension
+or injected gold is used. Shortages are explicitly checked against tier plans.
+
+The affordable expanding campaign reference still wins all three sieges
+deterministically without a pendulum; unchanged Siege 1 defenses still lose
+Siege 3 with growth. Reference campaign bounties are 212/312/450 G, keep damage
+0/0/1820 HP, payouts 363/418/100 G, entering-prep treasuries S2 615 G / S3 965 G,
+and durations 219.4/250.9/274.7 seconds. Final keep HP is 180/2000.
+
+No browser suites, controller acceptance checks or screenshots were run/produced.
+UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 
 ## Known Issues / Next Steps
 - Not yet play-tested by a human; balance comes from headless reference runs.
   First playtest questions: is S3 too hard without the pendulum, is the
-  pendulum worth 400 gold, do players discover forward walls at bends?
-- Pendulum gantry reads at a glance but could be larger/more ornate.
-- Results breakdown mixes stats and gold rows in row-major two columns.
+  pendulum worth 400 gold, do players discover forward walls at bends? Do scout
+  reports help players choose spikes, golems and trigger lanes, and does the very
+  successful mechanical fixture leave enough room for other viable approaches?
+- Controller review remains for 1366×768 scout/results readability, chain visibility,
+  simultaneous bounty-label legibility, pendulum impact weight and shake intensity.
 - Audio is procedural and untested by ear.

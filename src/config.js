@@ -7,7 +7,7 @@ export const CONFIG = {
   population: 6,
   campaignSieges: 3,
   bounties: { foot: 2, chiseler: 3, powder: 5, boss: 100 },
-  bountyFeedback: { mergeSeconds: 0.3, mergeRadius: 2, duration: 1.2, rise: 24, maxLabels: 24 },
+  bountyFeedback: { mergeSeconds: 0.35, mergeRadius: 2, duration: 1.2, rise: 24, maxLabels: 24 },
   growth: { weights: { inhabitants: 40, keep: 30, civilians: 20, unreached: 10 },
     thresholds: { strong: 80, exceptional: 95 },
     tiers: { standard: { houses: 1, farms: 1 }, strong: { houses: 2, farms: 2 }, exceptional: { houses: 3, farms: 2 } },

@@ -69,7 +69,7 @@ test/*.test.js           node:test suites on sim modules only
 
 Renderer and UI **never mutate sim state** except through the api functions.
 Visual effects (dust, debris, shake, floating numbers) are driven by events the sim
-pushes onto `state.events` (drained by the renderer each frame), so sim stays pure.
+pushes onto `state.events` (observed with a renderer-owned cursor), so sim stays pure.
 
 ## 2. Map — The Canyon Keep (`src/data/map.js`)
 
@@ -216,8 +216,9 @@ Rules:
   cooldown. No units are moved or crushed. Mechanisms update after unit movement;
   each completed raise/start of lowering rebuilds flow and clears enemy walk targets.
   Continue and retry restore lowered mechanisms; links persist.
-- In prep, faint sensor circles and dashed linkage lines with gear dots explain
-  connections; firing briefly flashes links in battle. Procedural audio accompanies
+- In prep, faint sensor circles and outlined warm-iron dashed chains with end rivets
+  explain connections. Selected sensor links are brighter; links remain hidden in
+  battle except for a brief bright traveling pulse on firing. Procedural audio accompanies
   activation and machinery. Unlinked devices and empty sensors produce advisory
   warnings under Start Siege; only the trade road disables Start.
 
@@ -305,13 +306,20 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 - Target length ≈ 3–4 min at 1×. Buildup → escalating groups → boss at ~70–80%
   of the timeline with an on-screen "THE BRUTE APPROACHES" banner and horn.
   No empty stretches > 12 s (fast-forward exists anyway).
-  - S1 "The First Assault": ~45 enemies, few powder carriers, boss 1200.
+  - S1 "The First Assault": 46 enemies, few powder carriers, boss 1200.
   - S2 "The Growing Threat": ~75, more chiselers + clustered powder groups, boss 1700.
   - S3 "The Great Siege": ~120, dense waves, powder carriers mixed into chiseler
     packs, two-pronged timing (big group arrives while previous is at walls), boss 2000.
 - End: **victory** when schedule exhausted and all enemies (incl. boss) dead;
   **defeat** when the keep is destroyed or every inhabitant is dead.
 - Breaches matter through rewards; a breach alone is not defeat.
+- Every preparation opens a dismissible "SIEGE N — SCOUT REPORT" card, after
+  the growth report on Sieges 2–3 and before building. A small prep-footer
+  "Scout report" button reopens it. Three or four short bullets live in
+  `src/data/sieges.js`: actual force counts and changes from the previous siege,
+  wall-attacking chiselers, powder clusters and the expected giant brute.
+  Reports never reveal exact spawn times. The public API can still prepare
+  headless builds while presentation reports are open.
 
 ## 9. Campaign, economy, rewards (`src/sim/campaign.js`)
 
@@ -332,7 +340,9 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 - Kill bounties pay immediately at the single enemy death point, regardless of
   cause: foot 2 G, chiseler 3 G, powder 5 G, boss 100 G. Each enemy pays once;
   siege stats track gold and per-type kills. Renderer events produce floating
-  gold labels, grouped within 0.3 seconds and two tiles. Battle treasury is live.
+  gold labels, grouped within 0.35 presentation seconds and two tiles, including
+  batched kills delivered in one frame. Larger sums use a slightly larger font;
+  remaining text overlaps are offset vertically. Battle treasury is live.
 - Rewards (victory only): completion 188 / 238 / 50; all inhabitants alive +100;
   no enemy reached the keep +75; structural damage < 15% of total structure HP +50; spent < 70% of
   pre-siege gold +50.
@@ -341,10 +351,12 @@ the keep. First enemy to touch the keep logs a `keepReached` event **once**.
 - Payout floor: net payout never below 100. Bounties are already in the treasury
   and are an informational results row, never paid a second time. No boss bonus.
 - Defeat: results show the same breakdown, payout 0, buttons Retry Siege /
-  Restart Campaign. After S3 victory: campaign-complete screen with totals.
+  Restart Campaign. After S3 victory: campaign-complete screen with total
+  bounties and the final contract rating (the final siege's rating and tier).
 - Results screen lists: result, enemies defeated, boss defeated, inhabitants
   saved/lost, enemies that reached the keep, buildings destroyed, each bonus and
-  penalty as a line item, net gold, treasury after. "Inspect castle" hides the
+  penalty as a line item, readable kill-bounty gold and per-type counts, net gold,
+  treasury after. "Inspect castle" hides the
   panel to view the battlefield (rubble + attack markers) before Continue.
 - All economy and reward numbers in `src/config.js`.
 
@@ -356,9 +368,11 @@ Performance and settlement growth:
   Results and campaign completion show the rating and tier.
 - Deterministic 2×2 sites use floor/castle tiles ≥7 columns from the spawn
   edge, avoid every structure, mount site and a built pendulum's strike band,
-  leave one tile from living military structures, and preserve the trade road
+  leave one tile from military structures, and preserve the trade road
   after every placement. No player military structures are changed.
-- Flood fill from spawns treats living military structures (including gates)
+- Growth evaluates breached military footprints as standing, preserving the
+  intended repaired perimeter, clearance and trade road.
+- Flood fill from spawns treats military structures (including gates)
   as blockers and civilians as traversable: unreached floor is inside walls.
   Houses cluster near habitation using BFS distance from the keep; farms occupy
   the next outward ring, preferring open neighbours. Ties use (y,x). Exceptional
@@ -366,8 +380,9 @@ Performance and settlement growth:
   Add a farm if food would fall short; place what fits and report shortages.
 - Continue shows a state-backed growth report with tier, settlers, added houses
   and farms, outside-wall warning and shortages, ending "Your next assignment:
-  Protect the growing settlement." Dismissal reveals prep. New buildings pulse
+  Protect the growing settlement." Dismissal reveals the scout report. New buildings pulse
   until the first successful build or eight seconds of visible prep.
+- Presentation pauses the prep highlight clock while scout intel covers the map.
 - The next siege's Start snapshot includes growth, so retry restores exact
   treasury and settlement without duplicating bounties, buildings or inhabitants.
   Restart returns to the keep-only settlement.

@@ -24,6 +24,23 @@ export const CAMPAIGN_ADDITIONS = {
   ],
 };
 
+// Three forward towers trade rear coverage for a trapped curtain and a
+// west-facing launcher covering the approach to the gate. All wiring uses API.
+export const MECHANICAL_BUILD = [
+  ...Array.from({length:10},(_,i)=>({type:({19:'golem',20:'gate',21:'spiked',23:'launcher'})[i+15]??'wall',x:43,y:i+15,...(i+15===23?{facing:'W'}:{})})),
+  {type:'tower',x:42,y:22},
+  {type:'tower',x:42,y:24},
+  {type:'tower',x:46,y:20},
+  {type:'sensor',x:41,y:23},
+];
+
+export function applyMechanicalBuild(game) {
+  for(const {type,x,y,...options} of MECHANICAL_BUILD) requireAction(game.api.place(type,x,y,options),`mechanical ${type} at ${x},${y}`);
+  const sensor=game.state.structures.find(s=>s.type==='sensor');
+  const launcher=game.state.structures.find(s=>s.type==='launcher');
+  requireAction(game.api.toggleLink(sensor.id,launcher.id),'wire mechanical sensor to launcher');
+}
+
 function requireAction(result, description) {
   if(!result?.ok) throw new Error(`HARNESS_PRECONDITION_FAILED: ${description}: ${result?.reason}`);
 }

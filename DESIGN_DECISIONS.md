@@ -442,3 +442,31 @@ reference campaign could not start Siege 2). Gates stay road-passable.
 - Semantic sensor, volley, bolt and retractable state is exposed through the
   existing live debug state getter and events, documented in CURRENT_STATE.md.
   This supplies read-only controller observations without an acceptance-only API.
+
+## 2026-10-23 — Fortress Engineer milestone 4: intel, feedback and balance
+
+- Each siege owns four scout bullets in the data layer, describing actual force
+  counts, changes from the preceding siege, wall pressure, powder clusters and
+  its giant brute without revealing spawn times. Preparation shows growth first,
+  then scout intel, then construction. The footer can reopen intel. Read-only
+  `state.scoutReport` exposes the pending report; dismissal/reopening use API
+  actions. Headless construction remains available. API retry retains its exact
+  snapshot; the UI retry action explicitly reopens intel for the new preparation.
+- Pendulum hits drive capped dust/debris and hit-scaled shake through one maximum
+  shake envelope shared with explosions and golems. Powder blasts descended from
+  pendulum kills receive stronger flashes. All additions observe existing events;
+  collision, timing, damage and mechanism rules are unchanged.
+- Prep wiring uses outlined iron chains with endpoint rivets and selected-link
+  emphasis. Battle wiring appears only for a brief firing pulse. Bounty labels
+  merge by presentation time (0.35 seconds, two tiles), rather than simulation
+  timestamps, so one batched multi-second step produces coherent gold feedback.
+  Measured text bounds resolve remaining collisions vertically; pools stay capped.
+- The 750 G mechanical S1 fixture uses three towers versus the reference's four,
+  plus spiked/golem walls and
+  a linked launcher. It wins with zero keep damage versus the 1000 G reference's
+  1300 damage; both earn 212 G bounty. All three new damage defenses engage.
+  These are layout examples rather than proof of optimal balance; no combat or
+  economy CONFIG tuning is justified. Only the visual merge window changes.
+- Results separate already-earned bounty gold and readable per-type counts.
+  Campaign completion totals bounty income from result history and labels the
+  final siege rating as the final contract rating; no new scoring rule is added.
