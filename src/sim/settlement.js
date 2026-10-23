@@ -1,6 +1,6 @@
 import { CONFIG } from '../config.js';
 import { WIDTH, HEIGHT, SPAWNS, SITES } from '../data/map.js';
-import { tileAt, isWalkable } from './grid.js';
+import { tileAt, isWalkable, blocksStructure } from './grid.js';
 import { hasTradeRoad } from './build.js';
 import { createInhabitants } from './inhabitants.js';
 
@@ -51,7 +51,7 @@ function distances(starts,blocked=()=>false) {
 // Breached (destroyed, not demolished) pieces still mark the player's intended
 // perimeter, so a battle breach does not reclassify the whole keep as outside.
 export function settlementOutside(state) {
-  const blockers=state.structures.filter(military);
+  const blockers=state.structures.filter(s=>military(s)&&blocksStructure(s));
   return distances(SPAWNS,(x,y)=>blockers.some(s=>covers(s,x,y)));
 }
 

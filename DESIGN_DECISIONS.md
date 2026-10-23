@@ -406,3 +406,39 @@ reference campaign could not start Siege 2). Gates stay road-passable.
 - The palette uses compact categorized rows with keys 5/6 for the upgrades and
   R for Repair. Spike sparks are throttled per attacker to 0.2 seconds, separate
   from continuous 12-DPS damage, so crowds receive feedback without text spam.
+
+## 2026-10-23 — Fortress Engineer milestone 3 implementation decisions
+
+- Occupancy is distinct from blocking. CONFIG `blocks:false` makes sensors
+  walkable and invulnerable; shared blocking queries serve enemy movement,
+  targeting, path cost, road access, golem collision and settlement enclosure.
+  Retractable walls use a CONFIG `retracts` flag and block only while raised.
+  Nonblocking works do not consume the explosion's six damageable structure slots.
+- Device activation/timers dispatch through the type registry in mechanisms.js.
+  Sensor delays latch on detection, finish even if that enemy leaves, then start
+  the six-second cooldown when fired. Dead linked devices are ignored; links to
+  demolished/replaced IDs are removed, and replacements never inherit wiring.
+  CONFIG device flags also define link eligibility and unlinked-device advisories.
+- Launcher cooldown begins with the first bolt. Bolts travel at 24 tiles/s;
+  swept axial segments and per-bolt hit IDs enforce once-only piercing damage.
+  Obstructions clip at their near face, rechecked ahead of each moving bolt so
+  raised walls stop approaching bolts without removing bolts already past them.
+  These supporting speed/feedback values are centralized in CONFIG; frozen
+  costs, HP, damage, range, cadence and cooldowns are unchanged.
+- Mechanisms update after units move. Retractable occupancy is checked throughout
+  rising, not just on activation; an interruption restarts the rise animation.
+  The full footprint is checked as well as the frozen 0.6 radius to avoid trapping
+  units near tile corners. After 1.5 seconds of accumulated occupied waiting, the
+  activation is skipped with the usual six-second cooldown. Only fully raised
+  walls block/take damage; lowering opens immediately and animates for 0.4 seconds.
+  Each blocking transition synchronously rebuilds flow and clears enemy steps.
+  Continue resets timers/lowered state while retaining links, facing, delay and HP;
+  retry restores the exact lowered preparation snapshot.
+- Five palette categories use a one-open-category accordion to leave room for
+  configuration at 1366×768. Keys 8/9/0/L select Sensor/Launcher/Retractable/Link;
+  R rotates launcher placement or selection and otherwise keeps Repair. Selecting
+  a mechanism via Link or after cancelling construction shows its configuration.
+  Advisory warnings are separate from the unchanged road-only Start requirement.
+- Semantic sensor, volley, bolt and retractable state is exposed through the
+  existing live debug state getter and events, documented in CURRENT_STATE.md.
+  This supplies read-only controller observations without an acceptance-only API.

@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { tileAt, isWalkable, structureAt } from './grid.js';
+import { tileAt, isWalkable, blockingAt } from './grid.js';
 
 export function createInhabitants(state) {
   const keep=state.structures.find(s=>s.type==='keep');
@@ -9,7 +9,7 @@ export function createInhabitants(state) {
     const angle=i/count*Math.PI*2;
     const x=keep.x+keep.w/2+Math.cos(angle)*(keep.w/2+.6);
     const y=keep.y+keep.h/2+Math.sin(angle)*(keep.h/2+.6);
-    const safe=isWalkable(Math.floor(x),Math.floor(y))&&!structureAt(state,Math.floor(x),Math.floor(y));
+    const safe=isWalkable(Math.floor(x),Math.floor(y))&&!blockingAt(state,Math.floor(x),Math.floor(y));
     state.inhabitants.push({id:state.nextId++,homeId:keep.id,x:safe?x:keep.x-.5,y:safe?y:keep.y+keep.h/2,
       hp:CONFIG.inhabitants.hp,maxHp:CONFIG.inhabitants.hp,sheltered:false,status:'idle',idleAngle:angle});
   }
@@ -29,7 +29,7 @@ export function homeInhabitants(state) {
     const angle=person.idleAngle;
     const cx=home.x+home.w/2,cy=home.y+home.h/2;
     const candidates=Array.from({length:16},(_,j)=>({x:cx+Math.cos(angle+j*Math.PI/8)*CONFIG.inhabitants.idleRadius,y:cy+Math.sin(angle+j*Math.PI/8)*CONFIG.inhabitants.idleRadius}));
-    const safe=candidates.find(p=>isWalkable(Math.floor(p.x),Math.floor(p.y))&&!structureAt(state,Math.floor(p.x),Math.floor(p.y)));
+    const safe=candidates.find(p=>isWalkable(Math.floor(p.x),Math.floor(p.y))&&!blockingAt(state,Math.floor(p.x),Math.floor(p.y)));
     if(safe){person.x=safe.x;person.y=safe.y;}
   });
 }
@@ -55,7 +55,7 @@ export function stepInhabitants(state,dt) {
       const cx=home.x+home.w/2,cy=home.y+home.h/2;
       const angle=person.idleAngle+state.time*CONFIG.combat.inhabitantWanderSpeed;
       const x=cx+Math.cos(angle)*config.idleRadius,y=cy+Math.sin(angle)*config.idleRadius;
-      if(isWalkable(Math.floor(x),Math.floor(y))&&!structureAt(state,Math.floor(x),Math.floor(y))) {person.x=x;person.y=y;}
+      if(isWalkable(Math.floor(x),Math.floor(y))&&!blockingAt(state,Math.floor(x),Math.floor(y))) {person.x=x;person.y=y;}
     }
   }
 }

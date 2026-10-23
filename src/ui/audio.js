@@ -4,6 +4,10 @@ export class Audio {
   tone(freq,duration=.15,type='sine',volume=.06,endFreq=freq){if(!this.context||this.muted||this.context.state!=='running')return;try{const a=this.context,t=a.currentTime,o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(Math.max(1,freq),t);o.frequency.exponentialRampToValueAtTime(Math.max(1,endFreq),t+duration);g.gain.setValueAtTime(volume,t);g.gain.exponentialRampToValueAtTime(.0001,t+duration);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+duration);}catch{}}
   noise(duration=.3,volume=.1,cutoff=600){if(!this.context||this.muted||this.context.state!=='running')return;try{const a=this.context,t=a.currentTime,b=a.createBuffer(1,Math.ceil(a.sampleRate*duration),a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);const s=a.createBufferSource(),g=a.createGain(),f=a.createBiquadFilter();s.buffer=b;f.type='lowpass';f.frequency.value=cutoff;g.gain.setValueAtTime(volume,t);g.gain.exponentialRampToValueAtTime(.001,t+duration);s.connect(f);f.connect(g);g.connect(a.destination);s.start();}catch{}}
   event(e){if(!this.context||this.muted)return;const now=this.context.currentTime;if(now-(this.last[e.type]??-10)<.065)return;this.last[e.type]=now;
+    if(e.type==='sensorFire'){this.tone(520,.09,'triangle',.025,960);return;}
+    if(e.type==='launcherFire'){this.noise(.09,.045,1800);this.tone(240,.12,'triangle',.055,65);this.tone(1300,.06,'sine',.025,420);return;}
+    if(e.type==='wallRaise'||e.type==='wallLower'){this.noise(.35,.045,650);this.tone(e.type==='wallRaise'?100:170,.35,'sawtooth',.018,e.type==='wallRaise'?170:65);return;}
+    if(e.type==='wallSkip'){this.tone(220,.15,'triangle',.025,150);return;}
     if(e.type==='golemAwaken'){this.noise(.6,.19,700);this.tone(55,.65,'sine',.2,25);this.tone(170,.55,'triangle',.05,260);return;}
     if(e.type==='golemSlam'){this.tone(75,.25,'sine',.09,30);this.noise(.18,.055,550);return;}
     if(e.type==='golemCrumble'){this.noise(.4,.08,850);return;}

@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js';
 import { SPAWNS } from '../data/map.js';
 import { SIEGES } from '../data/sieges.js';
-import { structureAt, isWalkable, emit, damageStructure, damageGolem } from './grid.js';
+import { structureAt, blockingAt, blocksStructure, isWalkable, emit, damageStructure, damageGolem } from './grid.js';
 import { nextStep } from './pathing.js';
 import { queueExplosion } from './explosions.js';
 
@@ -50,7 +50,7 @@ function canReachGolem(state,enemy,golem) {
   const pieces=Math.max(1,Math.ceil(distance/CONFIG.golem.knockbackStep));
   for(let i=1;i<=pieces;i++) {
     const x=Math.floor(enemy.x+(golem.x-enemy.x)*i/pieces),y=Math.floor(enemy.y+(golem.y-enemy.y)*i/pieces);
-    if(!isWalkable(x,y)||structureAt(state,x,y)) return false;
+    if(!isWalkable(x,y)||blockingAt(state,x,y)) return false;
   }
   return true;
 }
@@ -60,7 +60,7 @@ function moveToward(state,enemy,x,y,distance) {
   if(length===0) return;
   const scale=Math.min(distance,length)/length;
   const nx=enemy.x+dx*scale,ny=enemy.y+dy*scale;
-  if(isWalkable(Math.floor(nx),Math.floor(ny)) && !structureAt(state,Math.floor(nx),Math.floor(ny))) {
+  if(isWalkable(Math.floor(nx),Math.floor(ny)) && !blockingAt(state,Math.floor(nx),Math.floor(ny))) {
     enemy.x=nx; enemy.y=ny;
     if(length<=distance+1e-8) enemy.walkTarget=null;
   }
@@ -163,7 +163,8 @@ export function stepEnemies(state,dt) {
     if(enemy.walkTarget && Math.hypot(enemy.x-enemy.walkTarget.x-.5,enemy.y-enemy.walkTarget.y-.5)<1e-8) enemy.walkTarget=null;
     const step=enemy.walkTarget || nextStep(state,enemy.x,enemy.y);
     enemy.walkTarget=step;
-    const target=pillage || (step && structureAt(state,step.x,step.y));
+    const obstacle=step && structureAt(state,step.x,step.y);
+    const target=pillage || (blocksStructure(obstacle) && obstacle);
     if(target) {
       if(distanceToStructure(enemy,target)<=CONFIG.combat.attackRange) attackStructure(state,enemy,target,dt);
       else {
@@ -186,7 +187,7 @@ export function stepEnemies(state,dt) {
     const push=CONFIG.combat.separationStrength*dt;
     for(const [unit,sign] of [[a,1],[b,-1]]) {
       const nx=unit.x+sign*dx/length*push,ny=unit.y+sign*dy/length*push;
-      if(isWalkable(Math.floor(nx),Math.floor(ny))&&!structureAt(state,Math.floor(nx),Math.floor(ny))) {unit.x=nx;unit.y=ny;}
+      if(isWalkable(Math.floor(nx),Math.floor(ny))&&!blockingAt(state,Math.floor(nx),Math.floor(ny))) {unit.x=nx;unit.y=ny;}
     }
   }
 }

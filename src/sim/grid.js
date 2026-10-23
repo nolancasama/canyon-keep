@@ -14,6 +14,14 @@ export function structureAt(state, x, y) {
     x < s.x + (s.w ?? 1) && y < s.y + (s.h ?? 1)) ?? null;
 }
 
+// Occupancy and blocking are distinct: tools still select walkable mechanisms.
+export function blocksStructure(structure) {
+  return !!structure && CONFIG.structures[structure.type]?.blocks !== false &&
+    (!CONFIG.structures[structure.type]?.retracts || structure.status === 'raised');
+}
+
+export function blockingAt(state, x, y) { return blocksStructure(structureAt(state, x, y)); }
+
 export function emit(state, type, data = {}) {
   const event = { ...data, ...(data.id !== undefined ? { entityId: data.id } : {}),
     id: state.nextEventId = (state.nextEventId ?? 0) + 1, type, t: state.time ?? 0 };
@@ -24,6 +32,7 @@ export function emit(state, type, data = {}) {
 
 export function damageStructure(state, structure, damage) {
   if (!structure || structure.destroyed || structure.hp <= 0) return false;
+  if (CONFIG.structures[structure.type]?.invulnerable || !blocksStructure(structure)) return false;
   structure.hp = Math.max(0, structure.hp - damage);
   if (state.phase === 'siege' && structure.type === 'golem' && structure.hp <= structure.maxHp * CONFIG.golem.awakenFraction) {
     const x = structure.x + .5, y = structure.y + .5;

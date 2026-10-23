@@ -1,12 +1,12 @@
 import { CONFIG } from '../config.js';
 import { WIDTH, HEIGHT, KEEP } from '../data/map.js';
-import { isWalkable, tileAt, structureAt } from './grid.js';
+import { isWalkable, tileAt, structureAt, blocksStructure } from './grid.js';
 
 const directions = [[1,0],[0,1],[-1,0],[0,-1]];
 const index = (x,y) => y * WIDTH + x;
 function cost(state,x,y) {
   const structure = structureAt(state,x,y);
-  return CONFIG.floorMovementCost + (structure && structure.type !== 'keep' ? structure.hp * CONFIG.breachCostPerHp : 0);
+  return CONFIG.floorMovementCost + (blocksStructure(structure) && structure.type !== 'keep' ? structure.hp * CONFIG.breachCostPerHp : 0);
 }
 
 // Reverse Dijkstra: a predecessor pays the cost of entering the current tile.

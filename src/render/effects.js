@@ -17,6 +17,9 @@ export class Effects {
       if(e.type==='pendulumHit'||e.type==='pendulumImpact'){this.burst(x,y,25,'#d9c6a0',95);this.burst(x,y,15,'#5b5e51',120);this.rings.push({x,y,age:0,radius:2.1,kind:'dust'});this.shake=Math.max(this.shake,e.type==='pendulumImpact'?8:4);this.stop=.06;}
       if(e.type==='bossSlam'){this.burst(x,y,30,'#c7b398',100);this.rings.push({x,y,age:0,radius:e.radius??CONFIG.enemies.boss.slamRadius,kind:'dust'});this.shake=Math.max(this.shake,6);}
       if(e.type==='chisel'){this.burst(e.targetX??x,e.targetY??y,4,'#ded0ae',27);}
+      if(e.type==='sensorFire'){this.rings.push({x,y,age:0,radius:.8,kind:'spark'});}
+      if(e.type==='launcherFire'){this.burst(x,y,5,'#ffe5a1',28);}
+      if(e.type==='wallRaise'||e.type==='wallLower'){this.burst(x,y,8,'#b8bba1',22);}
       if(e.type==='spikeHit'){this.burst(x,y,5,'#fff0b9',32);this.rings.push({x,y,age:0,radius:.38,kind:'spark'});}
       if(e.type==='golemAwaken'){this.burst(x,y,38,'#b8b99a',95);this.burst(x,y,16,'#526e5d',75);this.rings.push({x,y,age:0,radius:1.5,kind:'emerge'});this.shake=Math.max(this.shake,5);}
       if(e.type==='golemSlam'){this.burst(x,y,14,'#c4c8aa',65);this.rings.push({x,y,age:0,radius:e.radius,kind:'dust'});this.shake=Math.max(this.shake,2);}

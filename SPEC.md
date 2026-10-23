@@ -33,7 +33,9 @@ procedural maps, ladders/tunneling/flanking AI, building during battle).
   hidden state, no Maps/Sets in persisted state — use arrays/objects; transient
   per-swing hit sets may use arrays of ids). `structuredClone` snapshots must work.
 - Debug/acceptance surface: `window.__game` exposes `{ state, api }` where `api`
-  has `place(type,x,y)`, `placeLine(type,x0,y0,x1,y1)`, `demolish(x,y)`,
+  has `place(type,x,y,{facing}?)`, `placeLine(type,x0,y0,x1,y1)`, `demolish(x,y)`,
+  `toggleLink(sensorId,deviceId)`, `cycleSensorDelay(sensorId)`,
+  `rotateLauncher(id)`, `mechanismWarnings()`,
   `canStart()`, `readiness()`, `price(type)`, `blockedRoadTiles()`,
   `startSiege()`, `triggerPendulum()`, `setSpeed(n)`, `stepSeconds(s)` (runs sim
   synchronously), `retrySiege()`, `restartCampaign()`, `phase()`.
@@ -55,6 +57,7 @@ src/sim/explosions.js    powder-carrier detonation queue + chain reactions
 src/sim/pendulum.js      Titan's Pendulum state machine + sweep hit detection
 src/sim/inhabitants.js   idle/flee/shelter behaviour
 src/sim/golems.js        temporary leashed wall defenders, slams and expiry
+src/sim/mechanisms.js    device registry, sensor detection, links, bolts, retractable timers
 src/sim/siege.js         createSiegeState, stepSiege(state, dt), end conditions, event log
 src/sim/campaign.js      campaign state, snapshots, retry, rewards/penalties, population growth
 src/sim/settlement.js    performance rating, deterministic client settlement growth
@@ -102,6 +105,9 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
 | Gate | 60 | 180 | 1×1 | blocks enemies; **counts as open for the trade-road check** |
 | Spiked Wall | 35 | 170 | 1×1 | blocking wall; deals 12 DPS to every enemy attacking it in melee |
 | Golem Wall | 90 | 240 | 1×1 | blocking dormant defender; awakens once at ≤50% HP during battle |
+| Proximity Sensor | 15 | invulnerable | 1×1 | walkable detector; links up to three devices |
+| Launcher | 70 | 200 | 1×1 | supporting wall; trigger-controlled directional piercing volley |
+| Retractable Wall | 45 | 200 raised | 1×1 | lowered by default; temporary triggered blocker; no tower support |
 | Barricade | 8 | 70 | 1×1 | cheap forward obstacle |
 | Archer tower | 120 | 250 | 1×1 | range 6.5 tiles, 12 dmg, 1.0 shot/s, arrows are visible projectiles |
 | House (client-owned) | free growth | 120 | 2×2 | +4 housing |
@@ -118,30 +124,33 @@ Rules:
   structures, or the spawn column + 2 tiles in front of it.
 - **Towers**: anywhere in the castle zone (`C`), or on canyon floor only if
   **orthogonally adjacent to a supporting wall-family piece** (wall, gate,
-  spiked or golem; "integrated into the castle"). CONFIG family, supportsTower,
+  spiked, golem or launcher; "integrated into the castle"). Retractable walls
+  never support towers. CONFIG family, supportsTower,
   military and line flags define replacement, support, settlement and drag rules.
   Demolishing a wall that would leave a canyon tower unsupported is refused
   with a reason.
 - **Trade-road rule:** preparation construction may seal the canyon or enclose
   the keep. Start Siege requires a 4-connected route from the spawn edge to
   the keep over floor/**gate** tiles, blocked by walls, barricades,
-  towers, houses, farms and cliffs. Terrain, overlap, footprint, tower support,
+  towers, houses, farms and cliffs. Sensors and lowered retractable walls are
+  traversable. Terrain, overlap, footprint, tower support,
   spawn safety and gold checks still apply to placement. Enemies treat gates
   as solid; their pathing is unchanged.
-- Wall, gate, spiked and golem tools replace any other living wall-family piece atomically
+- Wall, gate, spiked, golem, launcher and retractable tools replace any other living wall-family piece atomically
   with a full-HP structure, including inside a sealed line. The net is the new
   price minus the old structure's HP-scaled refund; only a positive net amount
   must be affordable. Failure leaves the state unchanged. The replacement records
   its full purchase price, preserves adjacent tower support, and updates occupancy,
   flow field and wall connections. Other occupied tiles remain invalid.
-- Left-click places; drag with any wall-family tool or barricade places a 4-connected line
+- Left-click places; drag with Wall, Gate, Spiked Wall, Golem Wall or Barricade places a 4-connected line
   (L-shaped: horizontal then vertical leg); family lines replace crossed family
   pieces and skip matching existing structures at no charge.
   Preview shows each tile green/red and the total net cost or refund; on release
   places every valid tile in order until gold runs out. Right-click or Esc cancels
   tool. Hotkeys: 1 Wall, 2 Gate,
   3 Barricade, 4 Tower, 5 Spiked Wall, 6 Golem Wall, 7 Pendulum, X Demolish,
-  R Repair, Space pendulum
+  8 Sensor, 9 Launcher, 0 Retractable Wall, L Link, R Repair (or rotate the
+  launcher placement/selected launcher clockwise), Space pendulum
   (siege), P pause, F speed cycle.
 - Demolish during prep: refund `round(paidCost × hp/maxHp)` (refund rate 1.0).
   Destroyed structures/rubble refund zero. Client buildings cannot be moved.
@@ -170,6 +179,48 @@ Rules:
   all 3 sites with their full sweep zones; a placed pendulum always shows its
   zone faintly during siege.
 
+### Mechanical triggers
+
+- CONFIG structure blocking flags separate occupancy from collision. Sensors
+  have `blocks:false`, are never targeted or damaged, and contribute no breach
+  cost, trade-road obstruction or settlement enclosure. They still occupy their
+  construction tile. Nonblocking mechanisms do not consume explosion structure slots.
+- Sensors detect living enemies, including bosses, within 1.5 tiles of the
+  sensor tile centre. A detected presence latches a delay of 0/0.5/1/2 seconds,
+  then activates each linked living device through the type registry's
+  `activate(state,device)`. A latched delay finishes even if the enemy leaves.
+  Firing starts a six-second cooldown; a standing enemy can trigger once per
+  cooldown window. Inhabitants and golems never trigger sensors.
+- The Link tool selects a sensor, then toggles launcher/retractable links (max
+  three). Empty ground or Esc clears selection. The sensor panel lists linked
+  devices, cycles delay and shows readiness. Links and configuration survive
+  retries and sieges; demolished/replaced IDs are removed, with no inherited
+  wiring on replacement. Destroyed targets are ignored when firing.
+- Launcher facing N/E/S/W is chosen before placement with R, or changed using
+  its prep configuration panel. Its preview shows the clipped firing lane.
+  Activation fires three piercing bolts 0.25 seconds apart; cooldown is five
+  seconds from activation, with busy activations ignored. Each bolt travels at
+  24 tiles/s, for at most 12 tiles from the launcher centre, damaging each enemy
+  once for 30 when within 0.45 tiles of the lane centre. Cliffs and blocking
+  structures stop bolts at their near face. Shared enemy damage pays bounties.
+  Unlinked launchers never fire automatically. Bolts and muzzle flashes are visible.
+- Retractable walls start every siege lowered, preserving any prior damage.
+  Activation rises over 0.4 seconds, blocks only when fully raised, holds eight
+  seconds, lowers over 0.4 seconds, then cools down for six seconds. Raised
+  walls can be attacked and destroyed into rubble; lowered walls take no damage.
+  Pending/busy activations are ignored. An occupied rise waits: any living
+  enemy, inhabitant or active golem within 0.6 tiles of the centre prevents it.
+  The whole footprint is also checked to avoid trapping a unit at a tile corner.
+  Occupancy is rechecked throughout the rise, restarting the animation if needed;
+  1.5 seconds of accumulated occupied waiting skips the activation and starts
+  cooldown. No units are moved or crushed. Mechanisms update after unit movement;
+  each completed raise/start of lowering rebuilds flow and clears enemy walk targets.
+  Continue and retry restore lowered mechanisms; links persist.
+- In prep, faint sensor circles and dashed linkage lines with gear dots explain
+  connections; firing briefly flashes links in battle. Procedural audio accompanies
+  activation and machinery. Unlinked devices and empty sensors produce advisory
+  warnings under Start Siege; only the trade road disables Start.
+
 ## 4. Enemies (`src/sim/enemies.js`, `src/sim/pathing.js`)
 
 | Type | HP | Speed (tiles/s) | Struct DPS | Unit DPS | Special |
@@ -182,12 +233,12 @@ Rules:
 **Pathing — breach-cost flow field.** One Dijkstra flow field toward the keep
 over 4-/8-connected tiles (no corner cutting past cliffs). Tile cost: floor 1,
 cliff ∞, structure `1 + hp × BREACH_COST_PER_HP` (config, start 0.08).
-Every enemy follows the field; if its next tile holds a structure it stops and
+Every enemy follows the field; if its next tile holds a blocking structure it stops and
 attacks that structure until it is destroyed. So enemies always walk toward the
 **cheapest breach on the direct route** — understandable, never stuck, not
 omniscient (they do not detour around the map to find an open gate if a weak
 wall is in front of them; cost does the choosing). Recompute the field only
-when a structure is destroyed (and at siege start). Units separate softly from
+when a structure is destroyed, a mechanism changes blocking state, or at siege start. Units separate softly from
 each other (cheap local repulsion) so groups read as crowds, not one dot.
 
 Boss: 3×3-tile visual footprint, follows the flow field as a point, attacks the
@@ -324,10 +375,13 @@ Performance and settlement growth:
 ## 10. HUD
 
 - Prep palette categories: Fortifications (Wall, Gate, Barricade, Archer tower),
-  Wall Upgrades (Spiked Wall, Golem Wall), Special Weapon (Titan's Pendulum),
+  Wall Upgrades (Spiked Wall, Golem Wall), Mechanisms (Proximity Sensor, Launcher,
+  Retractable Wall, Link), Special Weapon (Titan's Pendulum),
   Editing (Demolish, Repair). Compact rows reserve space for a simple information
   panel: chosen tool cost, HP and description, or an existing structure's type,
-  HP and refund while hovering/selecting it with Demolish/Repair.
+  HP and refund while hovering/selecting it with Demolish/Repair. Only one
+  accordion category is open at a time, keeping configuration visible at 1366×768.
+  A mechanism can also be selected with Link or after cancelling the build tool.
 - Prep (top bar + left build palette): gold, population, housing x/y, food x/y
   (red when short), selected tool + cost, hovered placement reason when invalid,
   Repair all (cost shown), Start Siege (disabled until ready), siege number/name.
@@ -354,7 +408,8 @@ Performance and settlement growth:
 ## 11. Audio
 
 Procedural WebAudio only (no files): arrow twang, chisel tick, explosion boom,
-pendulum creak/whoosh/thud, boss horn, victory/defeat stingers. Master mute
+pendulum creak/whoosh/thud, sensor signal, launcher discharge, retractable
+gears, boss horn, victory/defeat stingers. Master mute
 toggle (M). Audio must start only after a user gesture and never throw.
 
 ## 12. Tests (`node --test test/`)
@@ -373,6 +428,10 @@ Siege gating,
 spiked-wall melee damage/bounties, generalized wall-family exchanges and hints,
 golem threshold/single awakening/opened-tile flow, leashed movement, slam
 damage/knockback/stun/bounties, enemy targeting, expiry and snapshot rollback,
+sensor radius/delay/cooldown and immunity, dispatcher extension, link limits and
+cleanup, directional launcher cadence/piercing/obstruction/range/bounties, exact
+mechanism retry and inter-siege configuration persistence, retractable occupancy
+fail-safe/animation/flow changes/attackability/cooldown and replacement support,
 reward/penalty math incl. `keepReached`
 counted once and payout floor, snapshot retry restores exact state and does not
 duplicate rewards, determinism (two runs of S1 with same build → identical

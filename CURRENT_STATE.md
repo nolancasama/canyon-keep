@@ -1,11 +1,11 @@
 # Current State
 
 ## Status
-Fortress Engineer milestones 1–2 implemented: bounties, settlement growth,
-spiked/golem walls, generalized wall-family exchange and a categorized palette,
+Fortress Engineer milestones 1–3 implemented: bounties, settlement growth,
+spiked/golem walls, trigger mechanisms, generalized wall-family exchange and a categorized palette,
 on the playable three-siege prototype. Headless validation passes;
 controller behavioral acceptance and aesthetic review of this update are pending.
-Work remains uncommitted. Later Fortress Engineer machinery is outside this update.
+Work remains uncommitted. Controller behavioral acceptance is not performed here.
 
 ## Run
 Run `npm start`, then open http://localhost:5180 (or use `start.bat`).
@@ -50,9 +50,11 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
 - Battle HUD, pause, 1×/2×/4× playback, procedural audio and mute.
 - Preparation demolition returns the amount actually paid, scaled by remaining
   HP (100% intact, zero for destroyed/free structures). Repair prices retain
-  their original base-cost calculation. Walls, gates, spiked walls and golem walls
-  atomically replace one another for new price minus the old HP-scaled refund, in clicks and drag lines;
-  only a positive net cost is required, and adjacent towers remain supported.
+  their original base-cost calculation. Walls, gates, spiked/golem walls, launchers and retractable walls
+  atomically replace one another for new price minus the old HP-scaled refund;
+  only a positive net cost is required. Launchers support canyon towers;
+  retractables do not, and exchanges that would strand towers are refused.
+  Wall/gate/spiked/golem and barricade tools retain drag-line construction.
 - Spiked walls (35 G / 170 HP) deal 12 DPS to every melee attacker with throttled
   hit sparks. Golem walls (90 G / 240 HP) awaken once at ≤50% HP during battle,
   opening their tile and rebuilding flow immediately without rubble or refund.
@@ -61,11 +63,32 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
   after 30 s or at 0 HP. Enemies can attack it; kills pay ordinary bounties.
   Dormant walls persist with damage, while temporary golems clear between sieges.
   Emergence has cracks, dust, screen shake and procedural audio.
-- The four-category palette groups Fortifications, Wall Upgrades, Special Weapon
-  and Editing in compact rows, with selected tool or existing structure info.
-  Keys 5/6 select the upgrades; R selects Repair; existing hotkeys remain.
+- Proximity sensors (15 G) are invulnerable, walkable tile devices. They detect
+  living enemies/bosses within radius 1.5, wait a configured 0/0.5/1/2 seconds,
+  then dispatch to up to three linked living devices, with six-second cooldowns.
+  Links and configuration survive retries and sieges; demolition/replacement
+  removes old IDs. Sensors never affect targeting, road access or enclosure.
+- Launchers (70 G / 200 HP) face N/E/S/W and fire only through linked triggers:
+  three piercing bolts 0.25 seconds apart, 30 damage each within 0.45 tiles of
+  the lane centre, range 12, speed 24 tiles/s, five-second activation cooldown.
+  Cliffs and blockers stop bolts; kills pay bounties. Placement/panel rotation,
+  clipped lane arrows, visible bolts, muzzle flashes and procedural sound are present.
+- Retractable walls (45 G / 200 HP) start lowered every siege, rise in 0.4 seconds,
+  hold raised for eight, lower in 0.4, then cool down for six. Only raised walls
+  block or take damage. Occupancy prevents rising: enemies, inhabitants or active
+  golems within 0.6 tiles (and any occupant in the footprint) wait; 1.5 occupied
+  seconds skips activation. Checks continue throughout the rise. Blocking changes
+  rebuild flow and clear cached enemy steps; destruction leaves ordinary rubble.
+  Continue and retry lower the wall while preserving appropriate snapshot damage.
+- The five-category palette groups Fortifications, Wall Upgrades, Mechanisms,
+  Special Weapon and Editing, with one accordion category open to reserve height
+  at 1366×768. Mechanisms includes Sensor, Launcher, Retractable Wall and Link.
+  Keys 8/9/0/L select them; contextual R rotates launchers or selects Repair.
+  Link selects sensors/toggles devices; the sensor panel lists links, delay and
+  readiness. Prep circles and dashed gear-dot linkage lines flash when firing.
 - The Start Siege advisory shows road readiness. Blocked-road hints pulse on
-  bordering walls/spiked/golem/barricades; previews show family net replacement prices.
+  bordering blocking wall-family pieces/barricades; previews show family net replacement prices.
+  Empty sensors and unlinked devices add advisory warnings without disabling Start.
   Houses/farms are absent from the palette. Player placement, demolition,
   replacement and repair cannot change houses, farms or the keep, including
   destroyed civilian sites. Repair all affects military structures only.
@@ -96,14 +119,27 @@ mutation. `api.phase()` retains its phase-string interface. Campaign observation
   `flowRevision` immediately on awakening. Events `golemAwaken`, `golemSlam`,
   `golemCrumble` and throttled `spikeHit` carry positions and entity IDs. These
   observations use the existing read-only presentation/harness state surface.
+- Mechanisms use the same live read-only observation surface, `window.__game.state`:
+  sensor structures expose `links`, `delay`, `pending` (null or remaining seconds),
+  `cooldown`, `flashRemaining`; launchers expose `facing`, `cooldown`,
+  `volleyRemaining`, `volleyTimer`, `muzzleRemaining`. Retractables expose `status`
+  (`lowered`, `waiting`, `rising`, `raised`, `lowering`, `cooldown`), `elapsed`,
+  `waitElapsed`, `cooldown`, `hp`, `destroyed`. `state.bolts` exposes positions,
+  direction, origin, traveled distance, `sourceId` and per-bolt `hitIds`.
+  `sensorFire`, `launcherFire`, `wallRaise`, `wallLower`, `wallSkip` events have
+  timestamps and structure IDs. Existing `flowRevision`/`flow.revision` show
+  synchronous raise/lower path updates. These are observations, not harness mutations.
 
 Actions include `place`, `placeLine`, `demolish`, `repair`, `repairAll`,
 `startSiege`, `triggerPendulum`, `setSpeed`, `stepSeconds`, `tick`,
 `continueCampaign`, `dismissGrowthReport`, `advancePrep(dt)`, `retrySiege`,
 `restartCampaign`, previews and capacity checks. `advancePrep` advances highlight
 time only in preparation after the report is dismissed.
-`place(type, x, y)` and `placeLine` atomically exchange any differing living
-wall/gate/spiked/golem pieces. Previews expose `replacement`, `replacedType`,
+`place(type, x, y, {facing}?)` atomically exchanges any differing living
+wall/gate/spiked/golem/launcher/retractable pieces; `placeLine` exchanges line-enabled
+family tools. Prep APIs `toggleLink(sensorId,deviceId)`, `cycleSensorDelay(id)`
+and `rotateLauncher(id)` configure mechanisms. `mechanismWarnings()` returns
+advisory message strings; readiness remains road-only. Previews expose `replacement`, `replacedType`,
 `refund` and net `cost`; matching line tiles are free skips. `readiness()` returns
 the shared tradeRoad-only requirement list with `ok` and `message` for
 each; `canStart()` and `startSiege()` use that same list. `price(type)` returns
@@ -118,7 +154,20 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
-`npm test`: milestone 2 final **80 passed, 0 failed**.
+`npm test`: milestone 3 stage 1 **91 passed, 0 failed**; final **103 passed, 0 failed**.
+Milestone 3 adds 23 headless tests for registry dispatch, sensor enemy/boss
+detection, delay and standing-presence cooldown, inhabitants ignored, link
+limits/toggles/cleanup, mixed-device activation, advisory readiness, directional
+three-bolt cadence, piercing width/range, cliff/wall obstruction, dynamically
+raised blockers ahead/behind bolts, bounties, unlinked inactivity, sensor
+walkability/enclosure/road/immunity, explosion damage-slot immunity, exact
+retry and cross-siege configuration, retractable rise/hold/lower/cooldown,
+enemy/inhabitant/golem fail-safe, interrupted rises and corner occupancy,
+no enemy inside a raised tile, synchronous flow/target updates, raised-wall
+damage/rubble, lowered resets, HP-scaled exchanges and tower-support refusal.
+No implementation test failures or repair reruns were needed.
+Syntax checks (`node --check`) passed for src/ui/interface.js,
+src/render/renderer.js and src/ui/audio.js; no build step exists.
 Coverage includes once-only bounty accounting (boss, powder chains, pendulum),
 informational results totals, exact treasury rollback, client structure/tool
 protection, free rebuilds, weighted rating, deterministic growth, outside-wall

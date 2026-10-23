@@ -8,6 +8,7 @@ import { stepExplosions } from './explosions.js';
 import { stepPendulum } from './pendulum.js';
 import { createInhabitants, stepInhabitants } from './inhabitants.js';
 import { stepGolems } from './golems.js';
+import { resetMechanisms, stepMechanisms } from './mechanisms.js';
 
 export function createSiegeState(state) {
   state.phase = 'siege';
@@ -18,6 +19,7 @@ export function createSiegeState(state) {
   state.golems = [];
   state.arrows = [];
   state.explosions = [];
+  resetMechanisms(state);
   state.schedule = expandSchedule(state.siegeIndex);
   state.spawnIndex = 0;
   state.keepReached = false;
@@ -43,6 +45,7 @@ export function stepSiege(state, dt = SIM_DT) {
   stepExplosions(state, dt);
   stepEnemies(state, dt);
   stepGolems(state, dt);
+  stepMechanisms(state, dt);
   state.stats.inhabitantsLost = state.inhabitants.filter(i => i.hp <= 0).length;
   // Process newly killed carriers on the following tick, preserving their delay.
   const keep = state.structures.find(s => s.type === 'keep');

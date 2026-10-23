@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { emit, damageStructure, damageGolem } from './grid.js';
+import { emit, damageStructure, damageGolem, blocksStructure } from './grid.js';
 import { damageEnemy } from './enemies.js';
 
 export function queueExplosion(state,carrier) {
@@ -11,7 +11,7 @@ export function queueExplosion(state,carrier) {
 
 function structureTiles(state,x,y,radius) {
   const tiles=[];
-  for (const s of state.structures) if (s.hp>0 && !s.destroyed) {
+  for (const s of state.structures) if (s.hp>0 && !s.destroyed && blocksStructure(s)) {
     for(let sy=s.y;sy<s.y+s.h;sy++) for(let sx=s.x;sx<s.x+s.w;sx++) {
       const distance=Math.hypot(sx+.5-x,sy+.5-y);
       if(distance<=radius) tiles.push({structure:s,x:sx,y:sy,distance});

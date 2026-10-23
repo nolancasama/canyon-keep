@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { SITES, SPAWNS, WIDTH } from '../data/map.js';
-import { tileAt, structureAt, isWalkable, emit } from './grid.js';
+import { tileAt, structureAt, isWalkable, emit, blocksStructure } from './grid.js';
+import { initializeMechanism, pruneLinks } from './mechanisms.js';
 
 const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const failure = (reason, cost = 0) => ({ valid: false, ok: false, reason, cost });
@@ -26,7 +27,7 @@ function tradeRoadRegion(state, candidate = null) {
     const s = candidate && x >= candidate.x && y >= candidate.y &&
       x < candidate.x + candidate.w && y < candidate.y + candidate.h
       ? candidate : structureAt(state, x, y);
-    return s && s.type !== 'gate' && s.type !== 'keep';
+    return blocksStructure(s) && s.type !== 'gate' && s.type !== 'keep';
   };
   const seen = new Set();
   const queue = SPAWNS.filter(s => !blocked(s.x, s.y)).map(s => ({ x: s.x, y: s.y }));
@@ -52,7 +53,7 @@ export function blockedRoadTiles(state) {
   if (state.phase !== 'prep') return [];
   const seen = tradeRoadRegion(state);
   if (state.structures.some(s => s.type === 'keep' && !s.destroyed && s.hp > 0 && seen.has(s.y * WIDTH + s.x))) return [];
-  return state.structures.filter(s => !s.destroyed && s.hp > 0 && s.type !== 'gate' &&
+  return state.structures.filter(s => !s.destroyed && s.hp > 0 && blocksStructure(s) && s.type !== 'gate' &&
     (CONFIG.structures[s.type]?.family === 'wall' || s.type === 'barricade') &&
     ORTHOGONAL.some(([dx, dy]) => seen.has((s.y + dy) * WIDTH + s.x + dx)))
     .map(s => ({ x: s.x, y: s.y }));
@@ -125,8 +126,10 @@ export function place(state, type, x, y, options) {
   } else {
     structure = { id, type, x, y, w: def.w, h: def.h, hp: def.hp,
       maxHp: def.hp, cost: def.cost, paidCost: check.replacement ? def.cost : check.cost, destroyed: false };
+    initializeMechanism(structure, options);
     if (check.replacement) state.structures.splice(state.structures.findIndex(s => s.id === check.replacedId), 1, structure);
     else state.structures.push(structure);
+    pruneLinks(state);
     state.flowRevision = (state.flowRevision ?? 0) + 1;
     state.rubble = (state.rubble ?? []).filter(r => !(r.x === x && r.y === y));
   }
@@ -146,7 +149,7 @@ export function lineTiles(x0, y0, x1, y1) {
 }
 
 export function previewLine(state, type, x0, y0, x1, y1) {
-  const scratch = { ...state, structures: state.structures.map(s => ({ ...s })),
+  const scratch = { ...state, structures: state.structures.map(s => ({ ...s, ...(s.links ? { links: [...s.links] } : {}) })),
     inhabitants: state.inhabitants?.map(p => ({ ...p })),
     rubble: [...(state.rubble ?? [])], events: [], eventLog: [] };
   let outOfGold = false;
@@ -188,6 +191,7 @@ export function demolish(state, x, y) {
   const refund = refundValue(target);
   if (pendulum) state.pendulum = null;
   else state.structures.splice(state.structures.indexOf(target), 1);
+  pruneLinks(state);
   state.rubble = (state.rubble ?? []).filter(r => r.id !== target.id);
   state.gold += refund;
   state.flowRevision = (state.flowRevision ?? 0) + 1;

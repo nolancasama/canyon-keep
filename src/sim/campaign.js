@@ -5,6 +5,7 @@ import { createSiegeState, stepSiege } from './siege.js';
 import { triggerPendulum } from './pendulum.js';
 import { createInhabitants } from './inhabitants.js';
 import { rateDefense, growSettlement } from './settlement.js';
+import * as mechanisms from './mechanisms.js';
 
 export function calculateResults(state) {
   const rules=CONFIG.rewards, before=state.snapshot;
@@ -49,7 +50,7 @@ export function createCampaignState(seed = CONFIG.seed) {
     pendulum: null, time: 0, tick: 0, speed: 1, flowRevision: 0,
     prepTime: 0, growthReport: null, growthHighlight: null,
     events: [], eventLog: [], eventSequence: 0, enemies: [], golems: [], inhabitants: [],
-    rubble: [], attackMarkers: [], explosions: [], arrows: [], schedule: [], spawnIndex: 0,
+    rubble: [], attackMarkers: [], explosions: [], arrows: [], bolts: [], schedule: [], spawnIndex: 0,
     keepReached: false,
     campaign: { rewardedSieges: [], history: [], complete: false,
       totals: { payout: 0, enemiesDefeated: 0, inhabitantsSaved: 0, inhabitantsLost: 0, buildingsDestroyed: 0, keepDamage: 0 } },
@@ -68,7 +69,11 @@ export function createGame(seed = CONFIG.seed) {
     if ((state.phase==='victory'||state.phase==='defeat')&&!state.results) state.results=calculateResults(state);
   };
   const api = {
-    place: (type, x, y) => build.place(state, type, x, y),
+    place: (type, x, y, options) => build.place(state, type, x, y, options),
+    toggleLink: (sensorId,deviceId) => mechanisms.toggleLink(state,sensorId,deviceId),
+    cycleSensorDelay: id => mechanisms.cycleSensorDelay(state,id),
+    rotateLauncher: id => mechanisms.rotateLauncher(state,id),
+    mechanismWarnings: () => mechanisms.mechanismWarnings(state),
     placeLine: (type, x0, y0, x1, y1) => build.placeLine(state, type, x0, y0, x1, y1),
     demolish: (x, y) => build.demolish(state, x, y),
     repair: (x, y) => build.repair(state, x, y),
@@ -138,6 +143,7 @@ export function createGame(seed = CONFIG.seed) {
       state.time=0;state.tick=0;state.speed=1;
       state.prepTime=0;
       state.enemies=[];state.golems=[];state.arrows=[];state.explosions=[];
+      mechanisms.resetMechanisms(state);
       state.schedule=[];state.spawnIndex=0;
       delete state.results;
       // Tower attack timers are battle-local; damage, rubble, and markers persist.
