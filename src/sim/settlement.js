@@ -7,7 +7,7 @@ import { createInhabitants } from './inhabitants.js';
 const STEPS=[[1,0],[-1,0],[0,1],[0,-1]];
 const civilian=s=>s.type==='house'||s.type==='farm';
 const alive=s=>!s.destroyed&&s.hp>0;
-const military=s=>['wall','gate','tower','barricade'].includes(s.type);
+const military=s=>CONFIG.structures[s.type]?.military;
 const covers=(s,x,y)=>x>=s.x&&y>=s.y&&x<s.x+s.w&&y<s.y+s.h;
 const overlaps=(a,b,clearance=0)=>a.x<b.x+b.w+clearance&&a.x+a.w>b.x-clearance&&
   a.y<b.y+b.h+clearance&&a.y+a.h>b.y-clearance;

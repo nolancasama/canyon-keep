@@ -5,6 +5,7 @@ import { MAP, KEEP, SITES } from '../src/data/map.js';
 import { damageStructure, structureAt, tileAt } from '../src/sim/grid.js';
 import { capacity, repairCost } from '../src/sim/build.js';
 import { nextStep, rebuildFlow } from '../src/sim/pathing.js';
+import { settlementOutside } from '../src/sim/settlement.js';
 import { createGame, tileOf, crossing, structure } from './helpers.js';
 
 test('terrain, occupancy, spawn buffer, and tower integration constrain placement', () => {
@@ -200,6 +201,119 @@ test('wall replacement refunds intact gates and charges for damaged gates', () =
     const wall = structureAt(game.state, 52, 10);
     assert.equal(wall.type, 'wall');
     assert.equal(wall.paidCost, CONFIG.structures.wall.cost);
+  }
+});
+
+test('wall-family upgrades and downgrades exchange intact and half-damaged paid value atomically', () => {
+  const exchanges = [
+    ['wall', 'spiked', 15, 25], ['spiked', 'wall', -15, 2],
+    ['wall', 'golem', 70, 80], ['golem', 'wall', -70, -25],
+    ['spiked', 'gate', 25, 42], ['gate', 'spiked', -25, 5],
+  ];
+  for (const [from, to, intact, damaged] of exchanges) for (const fraction of [1, 0.5]) {
+    const game = createGame(), cost = fraction === 1 ? intact : damaged;
+    assert.equal(game.api.place(from, 52, 10).ok, true);
+    const old = structureAt(game.state, 52, 10);
+    old.hp *= fraction;
+    game.state.gold = Math.max(0, cost);
+    const preview = game.api.preview(to, 52, 10);
+    assert.equal(preview.valid, true, `${from} -> ${to} at ${fraction} HP`);
+    assert.equal(preview.cost, cost);
+    assert.equal(preview.replacement, true);
+    assert.equal(preview.replacedType, from);
+    const gold = game.state.gold, revision = game.state.flowRevision;
+    assert.equal(game.api.place(to, 52, 10).ok, true);
+    const replacement = structureAt(game.state, 52, 10);
+    assert.equal(replacement.type, to);
+    assert.equal(replacement.hp, CONFIG.structures[to].hp);
+    assert.equal(replacement.paidCost, CONFIG.structures[to].cost);
+    assert.equal(game.state.gold, gold - cost);
+    assert.equal(game.state.structures.some(s => s.id === old.id), false);
+    assert.ok(game.state.flowRevision > revision);
+
+    if (cost > 0) {
+      const limited = createGame();
+      assert.equal(limited.api.place(from, 52, 10).ok, true);
+      structureAt(limited.state, 52, 10).hp *= fraction;
+      limited.state.gold = cost - 1;
+      const before = structuredClone(limited.state);
+      assert.equal(limited.api.place(to, 52, 10).ok, false);
+      assert.deepEqual(limited.state, before);
+    }
+  }
+});
+
+test('new wall-family lines total sequential exchanges, skip matching tiles, and stop before an unaffordable tile', () => {
+  for (const [fraction, expected] of [[1, -5], [0.5, 40]]) {
+    const game = createGame();
+    assert.equal(game.api.place('wall', 53, 10).ok, true);
+    assert.equal(game.api.place('spiked', 54, 10).ok, true);
+    assert.equal(game.api.place('golem', 55, 10).ok, true);
+    structureAt(game.state, 55, 10).hp *= fraction;
+    const same = structureAt(game.state, 54, 10), gold = game.state.gold;
+    const preview = game.api.previewLine('spiked', 52, 10, 55, 10);
+    assert.equal(preview.totalCost, expected);
+    assert.equal(preview.tiles[2].skipped, true);
+    assert.equal(game.api.placeLine('spiked', 52, 10, 55, 10).placed, 3);
+    assert.equal(game.state.gold, gold - expected);
+    assert.equal(structureAt(game.state, 54, 10).id, same.id);
+    for (let x = 52; x <= 55; x++) assert.equal(structureAt(game.state, x, 10).type, 'spiked');
+  }
+  const game = createGame();
+  for (let x = 52; x <= 54; x++) assert.equal(game.api.place('wall', x, 10).ok, true);
+  game.state.gold = 70;
+  const preview = game.api.previewLine('golem', 52, 10, 54, 10);
+  assert.equal(preview.totalCost, 70);
+  assert.equal(preview.tiles[1].valid, false);
+  const result = game.api.placeLine('golem', 52, 10, 54, 10);
+  assert.equal(result.placed, 1);
+  assert.equal(result.results.length, 2);
+  assert.equal(game.state.gold, 0);
+  assert.equal(structureAt(game.state, 52, 10).type, 'golem');
+  for (const x of [53, 54]) assert.equal(structureAt(game.state, x, 10).type, 'wall');
+});
+
+test('every current wall-family member supports canyon towers throughout replacement', () => {
+  const game = createGame();
+  const floor = crossing(8).find(p => tileAt(p.x, p.y) === '.' && tileAt(p.x - 1, p.y) === '.');
+  assert.ok(floor);
+  assert.equal(game.api.place('spiked', floor.x - 1, floor.y).ok, true);
+  assert.equal(game.api.place('tower', floor.x, floor.y).ok, true);
+  const tower = structuredClone(structureAt(game.state, floor.x, floor.y));
+  for (const type of ['golem', 'gate', 'wall', 'spiked']) {
+    assert.equal(game.api.place(type, floor.x - 1, floor.y).ok, true);
+    assert.deepEqual(structureAt(game.state, floor.x, floor.y), tower);
+    assert.equal(game.api.demolish(floor.x - 1, floor.y).ok, false);
+  }
+});
+
+test('wall-family tools never replace other player or client structures', () => {
+  for (const type of ['tower', 'barricade', 'house', 'farm', 'keep']) {
+    const game = createGame();
+    const target = type === 'keep' ? game.state.structures[0] : structure(game.state, type, 52, 10);
+    const before = structuredClone(game.state);
+    for (const upgrade of ['spiked', 'golem']) assert.equal(game.api.place(upgrade, target.x, target.y).ok, false);
+    assert.deepEqual(game.state, before);
+  }
+  const game = createGame(), site = SITES[0];
+  assert.equal(game.api.place('pendulum', site.x, site.y).ok, true);
+  const before = structuredClone(game.state);
+  for (const upgrade of ['spiked', 'golem']) assert.equal(game.api.place(upgrade, site.x, site.y).ok, false);
+  assert.deepEqual(game.state, before);
+});
+
+test('spiked and golem walls participate in blocked-road hints and intended settlement perimeters', () => {
+  for (const type of ['spiked', 'golem']) {
+    const game = createGame(), points = crossing(5);
+    for (const { x, y } of points) assert.equal(game.api.place(type, x, y).ok, true);
+    assert.equal(game.api.readiness()[0].ok, false);
+    const hints = game.api.blockedRoadTiles();
+    for (const point of points) assert.ok(hints.some(p => p.x === point.x && p.y === point.y));
+    assert.equal(settlementOutside(game.state)[KEEP.y * MAP[0].length + KEEP.x], Infinity);
+    // Growth keeps the same intended perimeter even after battle breaches it.
+    const breached = structureAt(game.state, points[0].x, points[0].y);
+    damageStructure(game.state, breached, breached.hp);
+    assert.equal(settlementOutside(game.state)[KEEP.y * MAP[0].length + KEEP.x], Infinity);
   }
 });
 

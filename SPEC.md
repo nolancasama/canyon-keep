@@ -54,6 +54,7 @@ src/sim/towers.js        archer targeting + arrows
 src/sim/explosions.js    powder-carrier detonation queue + chain reactions
 src/sim/pendulum.js      Titan's Pendulum state machine + sweep hit detection
 src/sim/inhabitants.js   idle/flee/shelter behaviour
+src/sim/golems.js        temporary leashed wall defenders, slams and expiry
 src/sim/siege.js         createSiegeState, stepSiege(state, dt), end conditions, event log
 src/sim/campaign.js      campaign state, snapshots, retry, rewards/penalties, population growth
 src/sim/settlement.js    performance rating, deterministic client settlement growth
@@ -99,6 +100,8 @@ pushes onto `state.events` (drained by the renderer each frame), so sim stays pu
 |---|---:|---:|---|---|
 | Wall | 20 | 200 | 1×1 | blocks; drag to place lines; auto-connects visually |
 | Gate | 60 | 180 | 1×1 | blocks enemies; **counts as open for the trade-road check** |
+| Spiked Wall | 35 | 170 | 1×1 | blocking wall; deals 12 DPS to every enemy attacking it in melee |
+| Golem Wall | 90 | 240 | 1×1 | blocking dormant defender; awakens once at ≤50% HP during battle |
 | Barricade | 8 | 70 | 1×1 | cheap forward obstacle |
 | Archer tower | 120 | 250 | 1×1 | range 6.5 tiles, 12 dmg, 1.0 shot/s, arrows are visible projectiles |
 | House (client-owned) | free growth | 120 | 2×2 | +4 housing |
@@ -114,7 +117,9 @@ Rules:
 - Floor tiles (`.`/`C`) only; no overlap with cliffs, keep, other
   structures, or the spawn column + 2 tiles in front of it.
 - **Towers**: anywhere in the castle zone (`C`), or on canyon floor only if
-  **orthogonally adjacent to a wall or gate** ("integrated into the castle").
+  **orthogonally adjacent to a supporting wall-family piece** (wall, gate,
+  spiked or golem; "integrated into the castle"). CONFIG family, supportsTower,
+  military and line flags define replacement, support, settlement and drag rules.
   Demolishing a wall that would leave a canyon tower unsupported is refused
   with a reason.
 - **Trade-road rule:** preparation construction may seal the canyon or enclose
@@ -123,19 +128,20 @@ Rules:
   towers, houses, farms and cliffs. Terrain, overlap, footprint, tower support,
   spawn safety and gold checks still apply to placement. Enemies treat gates
   as solid; their pathing is unchanged.
-- Using either wall/gate tool on the other living structure replaces it atomically
+- Wall, gate, spiked and golem tools replace any other living wall-family piece atomically
   with a full-HP structure, including inside a sealed line. The net is the new
   price minus the old structure's HP-scaled refund; only a positive net amount
   must be affordable. Failure leaves the state unchanged. The replacement records
   its full purchase price, preserves adjacent tower support, and updates occupancy,
   flow field and wall connections. Other occupied tiles remain invalid.
-- Left-click places; drag with wall/barricade/gate places a 4-connected line
-  (L-shaped: horizontal then vertical leg); wall/gate lines replace crossed
-  gates/walls respectively and skip matching existing structures at no charge.
+- Left-click places; drag with any wall-family tool or barricade places a 4-connected line
+  (L-shaped: horizontal then vertical leg); family lines replace crossed family
+  pieces and skip matching existing structures at no charge.
   Preview shows each tile green/red and the total net cost or refund; on release
   places every valid tile in order until gold runs out. Right-click or Esc cancels
   tool. Hotkeys: 1 Wall, 2 Gate,
-  3 Barricade, 4 Tower, 7 Pendulum, X Demolish, Space pendulum
+  3 Barricade, 4 Tower, 5 Spiked Wall, 6 Golem Wall, 7 Pendulum, X Demolish,
+  R Repair, Space pendulum
   (siege), P pause, F speed cycle.
 - Demolish during prep: refund `round(paidCost × hp/maxHp)` (refund rate 1.0).
   Destroyed structures/rubble refund zero. Client buildings cannot be moved.
@@ -145,6 +151,21 @@ Rules:
   rubble markers in prep (shows where breaches happened) and can be rebuilt at
   the current placement price.
 - No construction during siege.
+- Spikes use the shared enemy damage/death path, so all kills pay bounties.
+  Each attacker receives a small spark/flash, throttled to once per 0.2 s.
+- Any battle damage that brings a golem wall to ≤50% HP (including a lethal hit)
+  consumes the wall and spawns one 350-HP golem at its centre. The wall leaves
+  no rubble or refund; occupancy opens, cached enemy steps clear and the flow
+  field rebuilds immediately through flowRevision. Emergence has visible cracks,
+  dust, a short screen shake and procedural sound.
+- Golems pursue enemies at 1.6 tiles/s while staying within 3.5 tiles of their
+  origin. They never attack structures or walk through blockers. A ready slam
+  hits all enemies within radius 1.2 for 35 damage, 1-tile collision-safe knockback
+  and 0.8 s stun (including bosses), with 1.2 s between slams. Kills pay bounties.
+  Enemies chase directly reachable golems within 2.5 tiles and use their existing
+  unit DPS against them. Explosions damage golems as exposed units.
+  Golems crumble at 0 HP or after 30 s and clear on Continue/start/retry;
+  unawakened walls and their damage persist normally. The pendulum is unchanged.
 - Hover/selection shows tower range circle; selecting the pendulum tool shows
   all 3 sites with their full sweep zones; a placed pendulum always shows its
   zone faintly during siege.
@@ -302,6 +323,11 @@ Performance and settlement growth:
 
 ## 10. HUD
 
+- Prep palette categories: Fortifications (Wall, Gate, Barricade, Archer tower),
+  Wall Upgrades (Spiked Wall, Golem Wall), Special Weapon (Titan's Pendulum),
+  Editing (Demolish, Repair). Compact rows reserve space for a simple information
+  panel: chosen tool cost, HP and description, or an existing structure's type,
+  HP and refund while hovering/selecting it with Demolish/Repair.
 - Prep (top bar + left build palette): gold, population, housing x/y, food x/y
   (red when short), selected tool + cost, hovered placement reason when invalid,
   Repair all (cost shown), Start Siege (disabled until ready), siege number/name.
@@ -312,12 +338,12 @@ Performance and settlement growth:
   replacement, and fits without scrolling at 1366×768 and 1440×860. Housing and
   food indicators remain in the HUD. When blocked, the advisory also explains
   replacing a wall with a gate.
-- During prep with a blocked trade road, wall/barricade tiles orthogonally
+- During prep with a blocked trade road, wall/spiked/golem/barricade tiles orthogonally
   bordering the spawn-reachable region receive a subtle pulsing red outline.
   No other path visualisation is shown. The sim supplies these hint tiles via
   `api.blockedRoadTiles()`; the UI does not implement readiness checks.
-- Wall/gate swap previews read "Replace Wall -> Gate | Cost: N G" or
-  "Replace Gate -> Wall | Refund: N G" (or `Cost` for a positive net), green
+- Wall-family swap previews read "Replace X -> Y | Cost: N G" or
+  "Replace X -> Y | Refund: N G" (or `Cost` for a positive net), green
   when affordable and red otherwise. Houses and farms are absent from the palette.
 - Battle: siege name + progress bar (schedule time), inhabitants remaining,
   keep HP bar, boss HP bar (when present), pendulum status widget (READY pulsing /
@@ -344,6 +370,9 @@ retry rollback, seeded construction/refund conservation,
 atomic wall/gate replacement in either direction (net affordability, no mutation
 on failure, support and flow updates), line replacement, readiness list + Start
 Siege gating,
+spiked-wall melee damage/bounties, generalized wall-family exchanges and hints,
+golem threshold/single awakening/opened-tile flow, leashed movement, slam
+damage/knockback/stun/bounties, enemy targeting, expiry and snapshot rollback,
 reward/penalty math incl. `keepReached`
 counted once and payout floor, snapshot retry restores exact state and does not
 duplicate rewards, determinism (two runs of S1 with same build → identical

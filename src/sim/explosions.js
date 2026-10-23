@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { emit, damageStructure } from './grid.js';
+import { emit, damageStructure, damageGolem } from './grid.js';
 import { damageEnemy } from './enemies.js';
 
 export function queueExplosion(state,carrier) {
@@ -37,6 +37,10 @@ export function stepExplosions(state) {
         state.attackMarkers.push({x:inhabitant.x,y:inhabitant.y,t:state.time});
         emit(state,'inhabitantAttacked',{x:inhabitant.x,y:inhabitant.y,id:inhabitant.id});
       }
+    }
+    for(const golem of state.golems??[]) if(golem.status==='active') {
+      const distance=Math.hypot(golem.x-blast.x,golem.y-blast.y);
+      if(distance<=config.radius) damageGolem(state,golem,config.unitDamage*falloff(distance));
     }
     const tiles=structureTiles(state,blast.x,blast.y,config.radius).slice(0,config.structureTileCap);
     for(const tile of tiles) damageStructure(state,tile.structure,config.structureDamage*falloff(tile.distance));

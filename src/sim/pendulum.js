@@ -58,7 +58,7 @@ function hitSweep(state,pendulum,site,previousAngle) {
     }
     emit(state,'pendulumHit',{x:enemy.x,y:enemy.y,id:enemy.id,enemyType:enemy.type,swingId:pendulum.swingId});
   }
-  for(const structure of state.structures) {
+  for(const structure of [...state.structures]) {
     if(structure.hp<=0||structure.destroyed||pendulum.hitIds.includes(structure.id)||!touchStructure(head,structure,config.radius)) continue;
     pendulum.hitIds.push(structure.id);hits++;
     damageStructure(state,structure,config.structureDamage);

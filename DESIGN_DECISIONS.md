@@ -378,3 +378,31 @@ Why: growth runs right after battle, before the player repairs; with live-only
 blockers one breach made the whole keep "outside", and a house could be placed
 in a gap that blocks the road once the wall is rebuilt (seen in review: the
 reference campaign could not start Siege 2). Gates stay road-passable.
+
+## 2026-10-23 — Fortress Engineer milestone 2 implementation decisions
+
+- Wall-family membership, canyon-tower support, military classification and line
+  eligibility live in CONFIG structure flags. Current members are wall, gate,
+  spiked and golem. The replacement path also refuses a future non-supporting
+  family member when it would strand a canyon tower. No later devices are added.
+- Awakening runs at the shared structure damage point during battle, including
+  hits that cross both the half-HP threshold and zero. The consumed wall is removed
+  rather than becoming destroyed rubble; stale enemy walk targets clear and the
+  flow field rebuilds synchronously. Iterating damage snapshots prevents removal
+  from skipping neighboring structures during an area hit. Awakening is not a
+  demolition/refund or a structureDestroyed event; existing results still count
+  the consumed wall's missing HP in structural damage.
+- Golems start with a ready slam, pursue at 1.6 tiles/s, and enemies target them
+  within the existing civilian chase distance of 2.5 tiles. These additional
+  values live in CONFIG. Enemy golem pursuit requires an unobstructed segment;
+  otherwise enemies keep their breach route instead of stalling against a wall.
+  Existing enemy unit DPS and explosion unit damage apply to golems. Pendulum
+  mechanics stay unchanged. All enemy types receive the frozen slam knockback
+  and stun; golems never attack structures.
+- Golems retain an observable active/crumbled record until the next siege/prep
+  transition; HP, origin, remaining lifetime and slam cooldown remain readable
+  through the existing live debug state. Continue clears even final-siege golems;
+  retry restores the exact dormant-wall preparation snapshot.
+- The palette uses compact categorized rows with keys 5/6 for the upgrades and
+  R for Repair. Spike sparks are throttled per attacker to 0.2 seconds, separate
+  from continuous 12-DPS damage, so crowds receive feedback without text spam.

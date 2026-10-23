@@ -48,7 +48,7 @@ export function createCampaignState(seed = CONFIG.seed) {
     structures: [{ id: 'keep', type: 'keep', x: KEEP.x, y: KEEP.y, w: keep.w, h: keep.h, hp: keep.hp, maxHp: keep.hp, cost: 0, destroyed: false }],
     pendulum: null, time: 0, tick: 0, speed: 1, flowRevision: 0,
     prepTime: 0, growthReport: null, growthHighlight: null,
-    events: [], eventLog: [], eventSequence: 0, enemies: [], inhabitants: [],
+    events: [], eventLog: [], eventSequence: 0, enemies: [], golems: [], inhabitants: [],
     rubble: [], attackMarkers: [], explosions: [], arrows: [], schedule: [], spawnIndex: 0,
     keepReached: false,
     campaign: { rewardedSieges: [], history: [], complete: false,
@@ -128,6 +128,7 @@ export function createGame(seed = CONFIG.seed) {
       for(const key of Object.keys(state.campaign.totals)) state.campaign.totals[key]+=result[key];
       delete state.snapshot;
       if(index===CONFIG.campaignSieges) {
+        state.golems=[];
         state.phase='complete';state.campaign.complete=true;
         return true;
       }
@@ -136,7 +137,7 @@ export function createGame(seed = CONFIG.seed) {
       state.phase='prep';
       state.time=0;state.tick=0;state.speed=1;
       state.prepTime=0;
-      state.enemies=[];state.arrows=[];state.explosions=[];
+      state.enemies=[];state.golems=[];state.arrows=[];state.explosions=[];
       state.schedule=[];state.spawnIndex=0;
       delete state.results;
       // Tower attack timers are battle-local; damage, rubble, and markers persist.

@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js';
 import { SPAWNS } from '../data/map.js';
 import { SIEGES } from '../data/sieges.js';
-import { structureAt, isWalkable, emit, damageStructure } from './grid.js';
+import { structureAt, isWalkable, emit, damageStructure, damageGolem } from './grid.js';
 import { nextStep } from './pathing.js';
 import { queueExplosion } from './explosions.js';
 
@@ -45,6 +45,16 @@ function distanceToStructure(e,s) {
   return Math.hypot(Math.max(s.x-e.x,0,e.x-(s.x+s.w)),Math.max(s.y-e.y,0,e.y-(s.y+s.h)));
 }
 
+function canReachGolem(state,enemy,golem) {
+  const distance=Math.hypot(golem.x-enemy.x,golem.y-enemy.y);
+  const pieces=Math.max(1,Math.ceil(distance/CONFIG.golem.knockbackStep));
+  for(let i=1;i<=pieces;i++) {
+    const x=Math.floor(enemy.x+(golem.x-enemy.x)*i/pieces),y=Math.floor(enemy.y+(golem.y-enemy.y)*i/pieces);
+    if(!isWalkable(x,y)||structureAt(state,x,y)) return false;
+  }
+  return true;
+}
+
 function moveToward(state,enemy,x,y,distance) {
   const dx=x-enemy.x,dy=y-enemy.y,length=Math.hypot(dx,dy);
   if(length===0) return;
@@ -71,7 +81,7 @@ function slam(state,enemy,target) {
   const spec=CONFIG.enemies.boss;
   const x=Math.max(target.x,Math.min(enemy.x,target.x+target.w));
   const y=Math.max(target.y,Math.min(enemy.y,target.y+target.h));
-  for(const s of state.structures) if(s.hp>0 && !s.destroyed && distanceToStructure({x,y},s)<=spec.slamRadius) damageStructure(state,s,spec.slamDamage);
+  for(const s of [...state.structures]) if(s.hp>0 && !s.destroyed && distanceToStructure({x,y},s)<=spec.slamRadius) damageStructure(state,s,spec.slamDamage);
   for(const other of state.enemies) if(other.id!==enemy.id && other.hp>0 && Math.hypot(other.x-x,other.y-y)<=spec.slamRadius) damageEnemy(state,other,spec.slamDamage);
   enemy.attackPhase='slamming';
   enemy.slamCooldown=CONFIG.combat.bossSlamCooldown;
@@ -82,6 +92,15 @@ function attackStructure(state,enemy,target,dt) {
   const spec=CONFIG.enemies[enemy.type];
   enemy.attackTargetId=target.id;
   markKeepReached(state,enemy,target);
+  if(target.type==='spiked') {
+    damageEnemy(state,enemy,CONFIG.spiked.dps*dt);
+    enemy.spikeClock=(enemy.spikeClock??0)-dt;
+    if(enemy.spikeClock<=0) {
+      enemy.spikeClock=CONFIG.spiked.feedbackInterval;
+      emit(state,'spikeHit',{id:enemy.id,x:enemy.x,y:enemy.y});
+    }
+    if(enemy.hp<=0) return;
+  }
   if(enemy.type==='boss') {
     if(enemy.slamCooldown>0) return;
     if(enemy.attackPhase!=='windup') {
@@ -123,6 +142,14 @@ export function stepEnemies(state,dt) {
     enemy.slamCooldown=Math.max(0,(enemy.slamCooldown||0)-dt);
     if(enemy.stunRemaining>0) {enemy.attackPhase='stunned';continue;}
     const speed=CONFIG.enemies[enemy.type].speed*(enemy.slowRemaining>0?CONFIG.pendulum.slowFactor:1);
+    const golem=(state.golems??[]).find(unit=>unit.status==='active' && Math.hypot(unit.x-enemy.x,unit.y-enemy.y)<=CONFIG.golem.chaseRadius && canReachGolem(state,enemy,unit));
+    if(golem) {
+      enemy.attackTargetId=golem.id;enemy.windupRemaining=0;enemy.walkTarget=null;
+      if(Math.hypot(enemy.x-golem.x,enemy.y-golem.y)<=CONFIG.combat.attackRange) {
+        enemy.attackPhase='attacking';damageGolem(state,golem,CONFIG.enemies[enemy.type].unitDps*dt);
+      } else {enemy.attackPhase='moving';moveToward(state,enemy,golem.x,golem.y,speed*dt);}
+      continue;
+    }
     const inhabitant=state.inhabitants.find(person=>person.hp>0 && !person.sheltered && Math.hypot(person.x-enemy.x,person.y-enemy.y)<=CONFIG.inhabitants.chaseRadius);
     if(inhabitant) {
       if(!attackInhabitant(state,enemy,inhabitant,dt)) {

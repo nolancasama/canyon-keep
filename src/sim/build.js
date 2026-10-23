@@ -10,8 +10,13 @@ const clientReason = 'The settlement owns houses, farms and the keep; player too
 function supported(state, tower, excludedId = null) {
   return ORTHOGONAL.some(([dx, dy]) => {
     const s = structureAt(state, tower.x + dx, tower.y + dy);
-    return s && s.id !== excludedId && (s.type === 'wall' || s.type === 'gate');
+    return s && s.id !== excludedId && CONFIG.structures[s.type]?.supportsTower;
   });
+}
+
+function losesTowerSupport(state, target) {
+  return state.structures.some(s => !s.destroyed && s.hp > 0 && s.type === 'tower' && tileAt(s.x, s.y) !== 'C' &&
+    supported(state, s) && !supported(state, s, target.id));
 }
 
 // Gates and the keep are traversable for merchants; all other buildings block.
@@ -47,7 +52,8 @@ export function blockedRoadTiles(state) {
   if (state.phase !== 'prep') return [];
   const seen = tradeRoadRegion(state);
   if (state.structures.some(s => s.type === 'keep' && !s.destroyed && s.hp > 0 && seen.has(s.y * WIDTH + s.x))) return [];
-  return state.structures.filter(s => !s.destroyed && s.hp > 0 && ['wall', 'barricade'].includes(s.type) &&
+  return state.structures.filter(s => !s.destroyed && s.hp > 0 && s.type !== 'gate' &&
+    (CONFIG.structures[s.type]?.family === 'wall' || s.type === 'barricade') &&
     ORTHOGONAL.some(([dx, dy]) => seen.has((s.y + dy) * WIDTH + s.x + dx)))
     .map(s => ({ x: s.x, y: s.y }));
 }
@@ -73,9 +79,10 @@ export function placement(state, type, x, y, { line = false } = {}) {
   if (!Number.isInteger(x) || !Number.isInteger(y)) return failure('Choose a map tile', cost);
   if (state.structures.some(s => clientOwned(s) && x < s.x+s.w && x+def.w > s.x && y < s.y+s.h && y+def.h > s.y)) return failure(clientReason, cost);
   const existing = structureAt(state, x, y);
-  const interchangeable = (type === 'gate' && existing?.type === 'wall') ||
-    (type === 'wall' && existing?.type === 'gate');
+  const interchangeable = existing && existing.type !== type && def.family &&
+    def.family === CONFIG.structures[existing.type]?.family;
   if (interchangeable) {
+    if (!def.supportsTower && losesTowerSupport(state, existing)) return failure('Would leave a canyon tower unsupported', cost);
     const refund = refundValue(existing), netCost = def.cost - refund;
     return { ...(state.gold < netCost ? failure('Not enough gold', netCost) :
       { valid: true, ok: true, reason: '', cost: netCost }), replacement: true,
@@ -96,7 +103,7 @@ export function placement(state, type, x, y, { line = false } = {}) {
     if (structureAt(state, tx, ty)) return failure('Another structure occupies this tile', cost);
   }
   if (type === 'tower' && tileAt(x, y) !== 'C' && !supported(state, { x, y })) {
-    return failure('Canyon towers must adjoin a wall or gate', def.cost);
+    return failure('Canyon towers must adjoin a supporting wall', def.cost);
   }
   if (state.gold < cost) return failure('Not enough gold', cost);
   return { valid: true, ok: true, reason: '', cost };
@@ -157,7 +164,7 @@ export function previewLine(state, type, x0, y0, x1, y1) {
 
 export function placeLine(state, type, x0, y0, x1, y1) {
   if (['keep', 'house', 'farm'].includes(type)) return failure(clientReason);
-  if (!['wall', 'gate', 'barricade'].includes(type)) return failure('This tool places one building at a time');
+  if (!CONFIG.structures[type]?.line) return failure('This tool places one building at a time');
   const results = [];
   for (const { x, y } of lineTiles(x0, y0, x1, y1)) {
     const result = place(state, type, x, y, { line: true });
@@ -175,9 +182,8 @@ export function demolish(state, x, y) {
     (s.destroyed || s.hp <= 0) && x >= s.x && y >= s.y && x < s.x + s.w && y < s.y + s.h);
   if (clientOwned(target)) return failure(clientReason);
   if (!target) return failure('Choose a player structure');
-  if (!pendulum && (target.type === 'wall' || target.type === 'gate')) {
-    if (state.structures.some(s => !s.destroyed && s.type === 'tower' && tileAt(s.x, s.y) !== 'C' && supported(state, s) &&
-      !supported(state, s, target.id))) return failure('Would leave a canyon tower unsupported');
+  if (!pendulum && CONFIG.structures[target.type]?.supportsTower && losesTowerSupport(state, target)) {
+    return failure('Would leave a canyon tower unsupported');
   }
   const refund = refundValue(target);
   if (pendulum) state.pendulum = null;

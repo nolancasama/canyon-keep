@@ -1,8 +1,9 @@
 # Current State
 
 ## Status
-Fortress Engineer milestone 1 implemented: kill bounties and automatic settlement
-growth, on the playable three-siege prototype. Headless validation passes;
+Fortress Engineer milestones 1–2 implemented: bounties, settlement growth,
+spiked/golem walls, generalized wall-family exchange and a categorized palette,
+on the playable three-siege prototype. Headless validation passes;
 controller behavioral acceptance and aesthetic review of this update are pending.
 Work remains uncommitted. Later Fortress Engineer machinery is outside this update.
 
@@ -49,11 +50,22 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
 - Battle HUD, pause, 1×/2×/4× playback, procedural audio and mute.
 - Preparation demolition returns the amount actually paid, scaled by remaining
   HP (100% intact, zero for destroyed/free structures). Repair prices retain
-  their original base-cost calculation. Walls and gates atomically replace one
-  another for new price minus the old HP-scaled refund, in clicks and drag lines;
+  their original base-cost calculation. Walls, gates, spiked walls and golem walls
+  atomically replace one another for new price minus the old HP-scaled refund, in clicks and drag lines;
   only a positive net cost is required, and adjacent towers remain supported.
+- Spiked walls (35 G / 170 HP) deal 12 DPS to every melee attacker with throttled
+  hit sparks. Golem walls (90 G / 240 HP) awaken once at ≤50% HP during battle,
+  opening their tile and rebuilding flow immediately without rubble or refund.
+  The 350-HP defender slams for 35 damage in radius 1.2 every 1.2 s, with 1-tile
+  knockback and 0.8 s stun. It stays within 3.5 tiles of its origin and crumbles
+  after 30 s or at 0 HP. Enemies can attack it; kills pay ordinary bounties.
+  Dormant walls persist with damage, while temporary golems clear between sieges.
+  Emergence has cracks, dust, screen shake and procedural audio.
+- The four-category palette groups Fortifications, Wall Upgrades, Special Weapon
+  and Editing in compact rows, with selected tool or existing structure info.
+  Keys 5/6 select the upgrades; R selects Repair; existing hotkeys remain.
 - The Start Siege advisory shows road readiness. Blocked-road hints pulse on
-  bordering walls/barricades; previews show wall/gate net replacement prices.
+  bordering walls/spiked/golem/barricades; previews show family net replacement prices.
   Houses/farms are absent from the palette. Player placement, demolition,
   replacement and repair cannot change houses, farms or the keep, including
   destroyed civilian sites. Repair all affects military structures only.
@@ -78,14 +90,21 @@ mutation. `api.phase()` retains its phase-string interface. Campaign observation
 - `state.pendulum.status`, `elapsed`, `resetRemaining`, `angle`, `drumAngle`,
   `swingId`, `hitIds`; enemy attack phase, target, windup, stun and slow;
   `keepReached`, `stats.keepReachedEnemies`, schedules, events and flow revision.
+- `state.golems`: temporary units with `wallId`, `status` (`active`/`crumbled`),
+  `hp`, `maxHp`, `x`, `y`, `originX`, `originY`, `remaining`, `attackCooldown`.
+  The consumed wall is absent from `state.structures`; `flow.revision` equals
+  `flowRevision` immediately on awakening. Events `golemAwaken`, `golemSlam`,
+  `golemCrumble` and throttled `spikeHit` carry positions and entity IDs. These
+  observations use the existing read-only presentation/harness state surface.
 
 Actions include `place`, `placeLine`, `demolish`, `repair`, `repairAll`,
 `startSiege`, `triggerPendulum`, `setSpeed`, `stepSeconds`, `tick`,
 `continueCampaign`, `dismissGrowthReport`, `advancePrep(dt)`, `retrySiege`,
 `restartCampaign`, previews and capacity checks. `advancePrep` advances highlight
 time only in preparation after the report is dismissed.
-`place('wall', x, y)` and `place('gate', x, y)` atomically replace a living gate
-and wall respectively. `readiness()` returns
+`place(type, x, y)` and `placeLine` atomically exchange any differing living
+wall/gate/spiked/golem pieces. Previews expose `replacement`, `replacedType`,
+`refund` and net `cost`; matching line tiles are free skips. `readiness()` returns
 the shared tradeRoad-only requirement list with `ok` and `message` for
 each; `canStart()` and `startSiege()` use that same list. `price(type)` returns
 the next placement price, and `blockedRoadTiles()` exposes map hint tiles.
@@ -99,19 +118,27 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
-`npm test`: baseline **48 passed, 0 failed**; final **64 passed, 0 failed**.
+`npm test`: milestone 2 final **80 passed, 0 failed**.
 Coverage includes once-only bounty accounting (boss, powder chains, pendulum),
 informational results totals, exact treasury rollback, client structure/tool
 protection, free rebuilds, weighted rating, deterministic growth, outside-wall
 exceptional growth, no overlap/cliffs, military clearance, pendulum avoidance,
 road preservation, shortages, extra food, report/highlight lifecycle and retry
-without duplicate settlement growth.
+without duplicate settlement growth. Milestone 2 adds intact/half-damaged family
+exchanges, affordability and line totals/stops, support and road hints, spike
+damage/bounties, once-only threshold awakening, immediate opened-tile flow and
+enemy movement, golem leash/slams/knockback/stun/bounties, enemy targeting through
+open routes, blocker fallback, lifetime/HP crumble and exact retry restoration.
+Enemy pursuit discards obsolete breach steps so crumbling golems release their
+attackers back onto the current flow route.
+Area-damage coverage also verifies neighboring walls both awaken when a powder
+blast or boss slam removes structures during iteration.
 The affordable campaign reference still wins all three sieges deterministically
 without a pendulum; unchanged Siege 1 defenses still lose Siege 3 with growth.
 Military fixture positions are unchanged; obsolete civilian placements were removed.
-Reference entering-prep treasuries: S2 **615 → 615 G**, S3 **1010 → 1010 G**
-(both **0%** change). Battle bounties are 212/312/450 G; results payouts changed
-575/775/725 → 363/463/275 G. Siege durations remain 219.4/243.7/260.1 seconds.
+Latest reference entering-prep treasuries: S2 **615 G**, S3 **965 G**.
+Battle bounties remain 212/312/450 G; results payouts are 363/418/100 G.
+Siege durations are 219.4/250.9/274.7 seconds, with 180/2000 keep HP after S3.
 No browser suites, controller acceptance checks or screenshots were run/produced
 for this update. UI layout and aesthetics remain for controller review.
 
