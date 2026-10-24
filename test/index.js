@@ -12,3 +12,4 @@ import './settlement.test.js';
 import './effects.test.js';
 import './bounties.test.js';
 import './mechanisms.test.js';
+import './frontier.test.js';

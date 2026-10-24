@@ -452,3 +452,73 @@ counted once and payout floor, snapshot retry restores exact state and does not
 duplicate rewards, determinism (two runs of S1 with same build → identical
 event-log hash), headless full S1 run with a reasonable reference build ends in
 victory and with no build ends in defeat.
+
+## 13. The Frontier Commission — slice 1 (Milestones A + B)
+
+The title offers **Canyon Keep Campaign** and **The Frontier Commission**.
+Sections 2–12 continue to specify the canyon campaign, including its original
+three sieges, growth, treasury, rewards and loss conditions. `createGame()` and
+numeric-seed calls still create that campaign. `createGame({stage:'frontier',
+seed})` or `api.startFrontier()` selects the independent handcrafted contract.
+Results and completion screens can return to the title.
+
+Shared systems are grid occupancy, breach-cost pathing, military construction,
+Class A defenses, mechanisms, combat, pause/speed controls and kill bounties.
+`src/data/stages.js` supplies each stage's map, settlement, siege schedule,
+reward model, tools and feature flags. Frontier implementation/data live under
+`src/sim/frontier/` and `src/data/frontier/`. Stage-aware terrain queries retain
+the canyon map as their default. Frontier has no growth or pendulum mount and
+all player construction remains preparation-only in this slice.
+
+Frontier is a 64×36 plain with an east approach, river crossings, rocks, roads,
+a keep, clustered town, outskirts farms and a separated hamlet. Owned buildings
+are pre-existing and protected from placement, replacement, demolition and repair,
+including destroyed footprints. Each has a stable ID, type, owner, HP, value,
+district, importance, objective flag, offered reward and promise state. One
+building starts damaged. Keep guards are visibly assigned static placeholders;
+NPC movement/combat and owner self-defense construction belong to slice 2.
+
+A dismissible/reopenable mayor briefing states the construction budget, threats,
+mandatory keep objective, assessed property at risk, fee, bonuses and damage
+rule. Data-backed scouts give approximate forces, directions and district risks
+without arrival times. Building requests offer Promise, Decline, Ask more
+(Communication gate, deterministic +50% reward), or Defend it yourselves.
+Communication starts at 2; at least one request requires 3. The journal records
+choices, locations, rewards and survival conditions. Workshop funds are a
+conditional immediate owner advance recorded separately from construction money;
+final settlement reconciles it with the survival condition. There is no career
+economy. Declines have no penalty; broken promises lose their reward and one
+contract-local reputation point. Self-defense choices record intent only.
+
+Frontier foot raiders select a nearby valuable property through the stage's
+targeting rule, lock onto it until destroyed, then resume toward the keep.
+Chiselers/powder retain breach behavior; the brute advances toward the keep.
+Property pursuit uses a target-specific breach field. Canyon enemy decisions
+retain their original rule. Frontier ends in victory after all arrivals die and
+pending explosions finish, or failure when the mandatory keep falls; optional
+property or civilian losses alone never end the contract.
+
+Construction gold is the client's budget; unused funds are never earnings.
+Bounties are separate earnings and cannot refill it. At acceptance each property
+records `assessed = value × hpStart/maxHp`. Its single liability entry is
+`assessed × (hpStart − hpEnd)/hpStart`, capped at full assessed value on
+destruction. Pre-existing damage is excluded. Mayor deductions itemize liability
+times `damageLiability` and civilian penalties, capped at the base fee; mayor
+payment is nonnegative. Failure pays no base fee or mayor bonuses, but surviving
+promised property owners still pay and earned bounties remain.
+
+Unpromised civilian properties above the assessed-value threshold which take no
+siege damage yield deterministic, capped thank-you payments. Results itemize
+mayor fees/bonuses/deductions, owner rewards and bounties separately, assessed
+value before/preserved, building/district damage, casualties, promises and final
+earnings. Rating uses preservation, casualties, objectives and promises, with
+reasons: Exceptional Engineering, Strong Defense, Acceptable Defense, Costly
+Victory or Contract Failed; kills do not influence it. Results finalize once
+and expose a paid flag. Retry restores the exact pre-siege snapshot, including
+budget, requests and owner ledger. Inspection retains damaged/destroyed property.
+
+Slice 2 adds NPC defenders, evacuation, guard reassignment, owner self-defense
+and emergency construction. Slice 3 adds skill advancement, procedural contracts
+and balance. This slice does not add those systems; stage flags and plain-data
+contract state reserve their integration points. The controller-frozen
+2026-10-24 design entry remains authoritative for those later milestones.

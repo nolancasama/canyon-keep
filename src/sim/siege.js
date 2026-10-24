@@ -1,5 +1,5 @@
 import { SIM_DT } from '../config.js';
-import { expandSchedule, SIEGES } from '../data/sieges.js';
+import { SIEGES } from '../data/sieges.js';
 import { emit } from './grid.js';
 import { rebuildFlow } from './pathing.js';
 import { spawnEnemy, stepEnemies } from './enemies.js';
@@ -9,6 +9,7 @@ import { stepPendulum } from './pendulum.js';
 import { createInhabitants, stepInhabitants } from './inhabitants.js';
 import { stepGolems } from './golems.js';
 import { resetMechanisms, stepMechanisms } from './mechanisms.js';
+import { stageFor, scheduleFor } from '../data/stages.js';
 
 export function createSiegeState(state) {
   state.phase = 'siege';
@@ -20,7 +21,7 @@ export function createSiegeState(state) {
   state.arrows = [];
   state.explosions = [];
   resetMechanisms(state);
-  state.schedule = expandSchedule(state.siegeIndex);
+  state.schedule = scheduleFor(state);
   state.spawnIndex = 0;
   state.keepReached = false;
   state.stats = { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false,
@@ -50,7 +51,7 @@ export function stepSiege(state, dt = SIM_DT) {
   // Process newly killed carriers on the following tick, preserving their delay.
   const keep = state.structures.find(s => s.type === 'keep');
   const living = state.inhabitants.filter(i => i.hp > 0);
-  if (!keep || keep.hp <= 0 || living.length === 0) {
+  if (!keep || keep.hp <= 0 || (!stageFor(state).flags.contractPayment && living.length === 0)) {
     state.phase = 'defeat';
     emit(state, 'defeat');
   } else if (state.spawnIndex === state.schedule.length && !state.enemies.some(e => e.hp > 0) && state.explosions.length === 0) {

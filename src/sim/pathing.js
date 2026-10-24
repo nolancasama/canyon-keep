@@ -10,7 +10,7 @@ function cost(state,x,y) {
 }
 
 // Reverse Dijkstra: a predecessor pays the cost of entering the current tile.
-export function rebuildFlow(state) {
+function buildFlow(state, target) {
   const distances = Array(WIDTH * HEIGHT).fill(null);
   const heap = [];
   function push(node) {
@@ -37,7 +37,7 @@ export function rebuildFlow(state) {
     }
     return first;
   }
-  const keep = state.structures.find(s => s.type === 'keep') || { ...KEEP, w:3, h:3 };
+  const keep = target || state.structures.find(s => s.type === 'keep') || { ...KEEP, w:3, h:3 };
   for (let y=keep.y;y<keep.y+keep.h;y++) for (let x=keep.x;x<keep.x+keep.w;x++) {
     distances[index(x,y)] = 0; push([0,x,y]);
   }
@@ -47,28 +47,36 @@ export function rebuildFlow(state) {
     const stepCost = cost(state,x,y);
     for (const [dx,dy] of directions) {
       const nx=x+dx, ny=y+dy;
-      if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny)) continue;
+      if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny,state)) continue;
       const candidate=distance+stepCost, id=index(nx,ny);
       if (distances[id] === null || candidate < distances[id]) {
         distances[id]=candidate; push([candidate,nx,ny]);
       }
     }
   }
-  state.flow = { distances, revision:state.flowRevision };
-  return state.flow;
+  return { distances, revision:state.flowRevision };
 }
 
-export function nextStep(state,x,y) {
+export function rebuildFlow(state) { state.flow=buildFlow(state);return state.flow; }
+
+export function nextStep(state,x,y,target=null) {
   if (!state.flow || state.flow.revision !== state.flowRevision) rebuildFlow(state);
+  let flow=state.flow;
+  if(target) {
+    const cached=(state.propertyFlows??={})[target.id];
+    flow=cached?.revision===state.flowRevision?cached:(state.propertyFlows[target.id]=buildFlow(state,target));
+  }
   x=Math.floor(x); y=Math.floor(y);
   let best=null, bestCost=Infinity;
   for (const [dx,dy] of directions) {
     const nx=x+dx,ny=y+dy;
-    if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny)) continue;
-    const distance=state.flow.distances[index(nx,ny)];
+    if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny,state)) continue;
+    const distance=flow.distances[index(nx,ny)];
     if (distance===null) continue;
     const total=distance+cost(state,nx,ny);
     if (total<bestCost) { bestCost=total; best={x:nx,y:ny}; }
   }
   return best;
 }
+
+export const nextStepTo = (state,x,y,target) => nextStep(state,x,y,target);

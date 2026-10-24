@@ -7,6 +7,8 @@ import { triggerPendulum } from './pendulum.js';
 import { createInhabitants } from './inhabitants.js';
 import { rateDefense, growSettlement } from './settlement.js';
 import * as mechanisms from './mechanisms.js';
+import { STAGES, stageFor, siegeFor } from '../data/stages.js';
+import { initializeFrontier, respondToRequest, finalizeContract } from './frontier/contract.js';
 
 export function calculateResults(state) {
   const rules=CONFIG.rewards, before=state.snapshot;
@@ -65,12 +67,39 @@ export function createCampaignState(seed = CONFIG.seed) {
 
 // The getter remains live after a retry/restart replaces the complete state.
 export function createGame(seed = CONFIG.seed) {
-  let state = createCampaignState(seed);
+  const options=typeof seed==='object'?seed:{};
+  seed=options.seed??(typeof seed==='number'?seed:CONFIG.seed);
+  const makeState = stageId => {
+    const next=createCampaignState(seed);
+    if(stageId==='frontier') initializeFrontier(next);
+    return next;
+  };
+  let state = makeState(options.stage??'canyon');
   const step = () => {
     stepSiege(state, SIM_DT);
-    if ((state.phase==='victory'||state.phase==='defeat')&&!state.results) state.results=calculateResults(state);
+    if ((state.phase==='victory'||state.phase==='defeat')&&!state.results) {
+      if(stageFor(state).flags.contractPayment) finalizeContract(state);
+      else state.results=calculateResults(state);
+    }
   };
   const api = {
+    selectStage(id) {
+      if(!STAGES[id]) return false;
+      state=makeState(id);return true;
+    },
+    startFrontier() { return api.selectStage('frontier'); },
+    returnToTitle() { state=makeState('canyon');state.phase='title';return true; },
+    respondToRequest: (id,choice) => respondToRequest(state,id,choice),
+    openBriefing() {
+      if(!state.contract) return false;
+      state.contract.briefingOpen=true;state.briefing=state.contract.briefing;return true;
+    },
+    dismissBriefing() {
+      if(!state.contract) return false;
+      state.contract.briefingOpen=false;state.briefing=null;return true;
+    },
+    openJournal() { if(!state.contract) return false;state.journalOpen=true;return true; },
+    closeJournal() { state.journalOpen=false;return true; },
     place: (type, x, y, options) => build.place(state, type, x, y, options),
     toggleLink: (sensorId,deviceId) => mechanisms.toggleLink(state,sensorId,deviceId),
     cycleSensorDelay: id => mechanisms.cycleSensorDelay(state,id),
@@ -93,6 +122,7 @@ export function createGame(seed = CONFIG.seed) {
       if (state.phase !== 'prep' || !check.ok) return { ok: false, reason: check.reason || 'Preparation only' };
       state.snapshot = structuredClone(state);
       state.growthReport=null;state.growthHighlight=null;state.scoutReport=null;
+      if(state.contract) {state.briefing=null;state.contract.briefingOpen=false;state.journalOpen=false;}
       createSiegeState(state);
       return { ok: true };
     },
@@ -116,7 +146,7 @@ export function createGame(seed = CONFIG.seed) {
     },
     openScoutReport() {
       if(state.phase!=='prep') return false;
-      state.scoutReport={siegeIndex:state.siegeIndex,bullets:[...SIEGES[state.siegeIndex].scoutReport]};
+      state.scoutReport={siegeIndex:state.siegeIndex,bullets:[...siegeFor(state).scoutReport]};
       return true;
     },
     dismissScoutReport() {
@@ -136,6 +166,10 @@ export function createGame(seed = CONFIG.seed) {
       return true;
     },
     continueCampaign() {
+      if(state.contract) {
+        if(state.phase!=='victory'||!state.results) return false;
+        state.phase='complete';return true;
+      }
       const index=state.siegeIndex;
       if(state.phase!=='victory'||state.campaign.rewardedSieges.includes(index)||!state.results) return false;
       const result=structuredClone(state.results);
@@ -164,7 +198,7 @@ export function createGame(seed = CONFIG.seed) {
       api.openScoutReport();
       return true;
     },
-    restartCampaign() { state = createCampaignState(seed); return true; },
+    restartCampaign() { state = makeState(stageFor(state).id); return true; },
     phase: () => state.phase,
   };
   return { get state() { return state; }, api };

@@ -1,6 +1,12 @@
 # Current State
 
 ## Status
+The Frontier Commission slice 1 (Milestones A + B) adds an independently
+selectable handcrafted contract with owned property, requests, negotiation,
+damage-based payment and an exact retry snapshot. The title also opens the
+existing canyon campaign. Frontier guards are static placeholders; self-defense
+choices are recorded for the next slice. Controller acceptance remains pending.
+
 Fortress Engineer milestones 1–4 implemented: bounties, settlement growth,
 spiked/golem walls, trigger mechanisms, scout intel, impact feedback and balance fixtures,
 on the playable three-siege prototype. Headless validation passes;
@@ -105,6 +111,27 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
   destroyed civilian sites. Repair all affects military structures only.
 
 ## Debug / Harness Surface
+Frontier observations use this same read-only presentation surface:
+`state.stageId === 'frontier'`, `contract` (acceptance assessment, requests,
+briefing, paid flag, earnings, owner advances, local reputation), `structures`
+(owner/value/importance/objectives/promise), `journal`, `skills.communication`,
+`guards` (assigned post and placeholder flag), and itemized `results`.
+Raiders expose `propertyTargetId` and `propertyRaidComplete`; property flow
+fields are cached by target and flow revision. The UI title uses phase `title`;
+the default headless factory still starts in canyon `prep`.
+
+Actions: `selectStage('canyon'|'frontier')`, `startFrontier()`, `returnToTitle()`,
+`openBriefing()` / `dismissBriefing()`, `openJournal()` / `closeJournal()`, and
+`respondToRequest(buildingId, 'promise'|'decline'|'askMore'|'selfDefend')`.
+Stage selection returns a boolean; request responses return `{ok, reason?}`.
+`createGame({stage:'frontier', seed})` constructs the same deterministic stage.
+`retrySiege()` restores the entire pre-siege contract snapshot, including
+requests, construction money and conditional workshop advance. `gold` is only
+the client's construction budget in Frontier; bounty gold stays in siege stats
+and final earnings. Finalization sets `contract.paid` / `results.paid` once,
+and never adds payouts to construction gold. Inspecting results leaves the
+battlefield and each property's final HP available.
+
 `window.__game.state` is a live getter; UI/render code observes it without
 mutation. `api.phase()` retains its phase-string interface. Campaign observations:
 - `state.phase`: `prep`, `siege`, `victory`, `defeat`, `complete`.
@@ -171,6 +198,32 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
+Frontier slice 1 integrated `npm test`: **129 passed, 0 failed**, including all
+110 existing canyon tests with unchanged assertions and 19 new Frontier tests.
+The test entry point imports the new suite for Node versions that resolve
+`node --test test/` through `test/index.js`. JavaScript syntax checks pass for
+`src/main.js`, `src/ui/interface.js`, `src/render/renderer.js` and
+`src/render/terrain.js`; no build step exists.
+
+Deterministic Frontier fixtures spend only public construction actions. The
+760 G distributed build wins with 93.22% assessed value preserved and the keep
+undamaged, fulfilling the merchant promise. The 740 G town-focused build wins
+with 84.34% preserved and no keep damage, while losing the eastern farm,
+orchard and hamlet cottages and breaking its farmer promise. An empty build
+fails the contract. Separate complete rectangular district curtains cost
+2480 G versus the 800 G budget; the estimate explicitly does not claim to be
+the cheapest possible terrain-assisted defense. Pure damage fixtures cover
+pre-existing workshop damage (108/180 HP; assessed 180 G of its 300 G value),
+partial/destruction charges, casualties, failure payouts, owner choices,
+Communication gates, thank-you caps, idempotence and exact retries.
+
+The first combined run found two fixture assumptions: distributed towers lost
+rear brute coverage, and the town build protected the elder's hall while losing
+other outlying property. Traced positions and damage events informed the final
+forward/rear tower plan and exposed-farm promise; the assertions still require
+a real high-preservation victory and a real broken-promise victory.
+No controller acceptance, browser suites or screenshots were run/produced.
+
 Final milestone 4 `npm test`: **110 passed, 0 failed**. Earlier development
 runs exposed retry snapshot expectations and effects tests while those changes
 were in progress; the integrated final run has no remaining failures.
@@ -206,6 +259,15 @@ No browser suites, controller acceptance checks or screenshots were run/produced
 UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 
 ## Known Issues / Next Steps
+- Frontier slice 2: NPC defenders, evacuation, guard reassignment, owner
+  self-defense structures and emergency construction. Slice 3: skills
+  advancement, procedural contracts and balance. Communication gates only are
+  present in slice 1; there is no persistent career or procedural map yet.
+- Frontier workshop payment is an immediate conditional advance in owner
+  earnings, reconciled at results; a broken promise pays zero in the final
+  ledger. No owner payment or bounty can fund construction.
+- Frontier visual layout and final aesthetic judgment remain for the
+  controller/Claude. No screenshots or browser acceptance were produced here.
 - Not yet play-tested by a human; balance comes from headless reference runs.
   First playtest questions: is S3 too hard without the pendulum, is the
   pendulum worth 400 gold, do players discover forward walls at bends? Do scout

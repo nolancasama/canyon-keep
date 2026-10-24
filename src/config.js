@@ -63,4 +63,37 @@ export const CONFIG = {
   combat: { attackRange: 0.7, separationRadius: 0.55, separationStrength: 0.7,
     bossSlamCooldown: 0, inhabitantWanderSpeed: 0.45, spawnSpacing: 0.18,
     chiselChipInterval: 0.16, pillageRadius: 1.5 },
+  frontier: {
+    budget: 800, baseFee: 600, damageLiability: 0.5, casualtyPenalty: 25,
+    thankYouThreshold: 150, thankYouRate: 0.05, thankYouCap: 80,
+    negotiationMultiplier: 1.5, starterCommunication: 2, propertySightRadius: 7,
+    guards: { count: 4, hp: 100 },
+    bonuses: { allCivilians: 80, workshop: 60 },
+    rating: { exceptional: 95, strong: 80, acceptable: 60, strongCasualties: 1 },
+    property: {
+      keep: { value: 1000 }, house: { value: 140 }, shop: { value: 240, hp: 140 },
+      warehouse: { value: 400, hp: 200 }, workshop: { value: 300, hp: 180, initialHp: 108 },
+      farm: { value: 180 }, hamlet: { value: 160 },
+    },
+    requests: {
+      merchant: { reward: 120, communication: 2 }, farmer: { reward: 80, communication: 3 },
+      workshop: { reward: 90, communication: 2 }, elder: { reward: 100, communication: 3 },
+    },
+    siege: { bossHp: 720, groups: [
+      { t: 0, type: 'foot', count: 4, spacing: 1.5, lane: 0 },
+      { t: 8, type: 'foot', count: 4, spacing: 2, lane: 1 },
+      { t: 18, type: 'foot', count: 3, spacing: 2, lane: 2 },
+      { t: 28, type: 'chiseler', count: 3, spacing: 2, lane: 1 },
+      { t: 38, type: 'powder', count: 2, spacing: 2, lane: 1 },
+      { t: 48, type: 'foot', count: 4, spacing: 2, lane: 0 },
+      { t: 62, type: 'chiseler', count: 3, spacing: 2, lane: 2 },
+      { t: 74, type: 'boss', count: 1, spacing: 0, lane: 1 },
+      { t: 84, type: 'foot', count: 3, spacing: 2, lane: 1 },
+    ] },
+  },
+};
+
+// Frontier properties are client-owned. Canyon never creates these types.
+for (const type of ['shop', 'warehouse', 'workshop']) CONFIG.structures[type] = {
+  cost: 0, hp: CONFIG.frontier.property[type].hp, w: 2, h: 2, civilian: true,
 };

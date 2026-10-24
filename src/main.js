@@ -5,6 +5,7 @@ import { Audio } from './ui/audio.js';
 import { Interface } from './ui/interface.js';
 
 const game=createGame();
+game.api.returnToTitle();
 window.__game=game;
 const canvas=document.getElementById('battlefield'),audio=new Audio(),renderer=new Renderer(canvas,audio),ui=new Interface(game,canvas,audio);
 let previous=performance.now(),accumulator=0;

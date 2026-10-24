@@ -1,17 +1,17 @@
 import { CONFIG } from '../config.js';
-import { SPAWNS } from '../data/map.js';
-import { SIEGES } from '../data/sieges.js';
 import { structureAt, blockingAt, blocksStructure, isWalkable, emit, damageStructure, damageGolem } from './grid.js';
 import { nextStep } from './pathing.js';
 import { queueExplosion } from './explosions.js';
+import { stageFor, siegeFor } from '../data/stages.js';
 
 export const isAlive = enemy => enemy.hp > 0;
 
 export function spawnEnemy(state,type,x,y,lane=0) {
   const spec=CONFIG.enemies[type];
   if(!spec) throw new Error(`Unknown enemy type: ${type}`);
-  const spawn=SPAWNS[((lane||0)%SPAWNS.length+SPAWNS.length)%SPAWNS.length];
-  const hp=type==='boss' ? SIEGES[state.siegeIndex||1].bossHp : spec.hp;
+  const spawns=stageFor(state).map.spawns;
+  const spawn=spawns[((lane||0)%spawns.length+spawns.length)%spawns.length];
+  const hp=type==='boss' ? siegeFor(state).bossHp : spec.hp;
   const enemy={id:state.nextId++,type,x:x??spawn.x+.5,y:y??spawn.y+.5,hp,maxHp:hp,
     attackPhase:'moving',attackTargetId:null,windupRemaining:0,slamCooldown:0,
     stunRemaining:0,slowRemaining:0,chipClock:0,detonated:false,dead:false};
@@ -26,7 +26,7 @@ export function damageEnemy(state,enemy,amount) {
   if(enemy.hp===0) {
     enemy.dead=true; enemy.attackPhase='dead';
     const bounty=CONFIG.bounties[enemy.type];
-    state.gold+=bounty;
+    if(!stageFor(state).flags.contractPayment) state.gold+=bounty;
     if(state.stats) {
       state.stats.enemiesDefeated++;
       state.stats.bountyGold=(state.stats.bountyGold??0)+bounty;
@@ -50,7 +50,7 @@ function canReachGolem(state,enemy,golem) {
   const pieces=Math.max(1,Math.ceil(distance/CONFIG.golem.knockbackStep));
   for(let i=1;i<=pieces;i++) {
     const x=Math.floor(enemy.x+(golem.x-enemy.x)*i/pieces),y=Math.floor(enemy.y+(golem.y-enemy.y)*i/pieces);
-    if(!isWalkable(x,y)||blockingAt(state,x,y)) return false;
+    if(!isWalkable(x,y,state)||blockingAt(state,x,y)) return false;
   }
   return true;
 }
@@ -60,7 +60,7 @@ function moveToward(state,enemy,x,y,distance) {
   if(length===0) return;
   const scale=Math.min(distance,length)/length;
   const nx=enemy.x+dx*scale,ny=enemy.y+dy*scale;
-  if(isWalkable(Math.floor(nx),Math.floor(ny)) && !blockingAt(state,Math.floor(nx),Math.floor(ny))) {
+  if(isWalkable(Math.floor(nx),Math.floor(ny),state) && !blockingAt(state,Math.floor(nx),Math.floor(ny))) {
     enemy.x=nx; enemy.y=ny;
     if(length<=distance+1e-8) enemy.walkTarget=null;
   }
@@ -142,7 +142,8 @@ export function stepEnemies(state,dt) {
     enemy.slamCooldown=Math.max(0,(enemy.slamCooldown||0)-dt);
     if(enemy.stunRemaining>0) {enemy.attackPhase='stunned';continue;}
     const speed=CONFIG.enemies[enemy.type].speed*(enemy.slowRemaining>0?CONFIG.pendulum.slowFactor:1);
-    const golem=(state.golems??[]).find(unit=>unit.status==='active' && Math.hypot(unit.x-enemy.x,unit.y-enemy.y)<=CONFIG.golem.chaseRadius && canReachGolem(state,enemy,unit));
+    const keepOnly=stageFor(state).flags.contractPayment&&enemy.type==='boss';
+    const golem=!keepOnly&&(state.golems??[]).find(unit=>unit.status==='active' && Math.hypot(unit.x-enemy.x,unit.y-enemy.y)<=CONFIG.golem.chaseRadius && canReachGolem(state,enemy,unit));
     if(golem) {
       enemy.attackTargetId=golem.id;enemy.windupRemaining=0;enemy.walkTarget=null;
       if(Math.hypot(enemy.x-golem.x,enemy.y-golem.y)<=CONFIG.combat.attackRange) {
@@ -150,7 +151,7 @@ export function stepEnemies(state,dt) {
       } else {enemy.attackPhase='moving';moveToward(state,enemy,golem.x,golem.y,speed*dt);}
       continue;
     }
-    const inhabitant=state.inhabitants.find(person=>person.hp>0 && !person.sheltered && Math.hypot(person.x-enemy.x,person.y-enemy.y)<=CONFIG.inhabitants.chaseRadius);
+    const inhabitant=!keepOnly&&state.inhabitants.find(person=>person.hp>0 && !person.sheltered && Math.hypot(person.x-enemy.x,person.y-enemy.y)<=CONFIG.inhabitants.chaseRadius);
     if(inhabitant) {
       if(!attackInhabitant(state,enemy,inhabitant,dt)) {
         enemy.attackPhase='moving';moveToward(state,enemy,inhabitant.x,inhabitant.y,speed*dt);
@@ -158,13 +159,15 @@ export function stepEnemies(state,dt) {
       continue;
     }
     // Pillaging remains local to the chosen route, never a map-wide detour.
-    const pillage=enemy.type==='foot' && (state.structures.find(s=>s.id===enemy.pillageTargetId&&s.hp>0&&!s.destroyed) || state.structures.find(s=>s.hp>0 && !s.destroyed && (s.type==='house'||s.type==='farm') && distanceToStructure(enemy,s)<=CONFIG.combat.pillageRadius));
+    const stage=stageFor(state);
+    const pillage=stage.targeting ? stage.targeting(state,enemy) : enemy.type==='foot' && (state.structures.find(s=>s.id===enemy.pillageTargetId&&s.hp>0&&!s.destroyed) || state.structures.find(s=>s.hp>0 && !s.destroyed && (s.type==='house'||s.type==='farm') && distanceToStructure(enemy,s)<=CONFIG.combat.pillageRadius));
+    if(stage.targeting && (pillage?.id??null)!==enemy.pillageTargetId) enemy.walkTarget=null;
     enemy.pillageTargetId=pillage?.id??null;
     if(enemy.walkTarget && Math.hypot(enemy.x-enemy.walkTarget.x-.5,enemy.y-enemy.walkTarget.y-.5)<1e-8) enemy.walkTarget=null;
-    const step=enemy.walkTarget || nextStep(state,enemy.x,enemy.y);
+    const step=enemy.walkTarget || nextStep(state,enemy.x,enemy.y,stage.targeting?pillage:null);
     enemy.walkTarget=step;
     const obstacle=step && structureAt(state,step.x,step.y);
-    const target=pillage || (blocksStructure(obstacle) && obstacle);
+    const target=stage.targeting ? (blocksStructure(obstacle)&&obstacle)||(pillage&&distanceToStructure(enemy,pillage)<=CONFIG.combat.attackRange?pillage:null) : pillage || (blocksStructure(obstacle) && obstacle);
     if(target) {
       if(distanceToStructure(enemy,target)<=CONFIG.combat.attackRange) attackStructure(state,enemy,target,dt);
       else {
@@ -187,7 +190,7 @@ export function stepEnemies(state,dt) {
     const push=CONFIG.combat.separationStrength*dt;
     for(const [unit,sign] of [[a,1],[b,-1]]) {
       const nx=unit.x+sign*dx/length*push,ny=unit.y+sign*dy/length*push;
-      if(isWalkable(Math.floor(nx),Math.floor(ny))&&!blockingAt(state,Math.floor(nx),Math.floor(ny))) {unit.x=nx;unit.y=ny;}
+      if(isWalkable(Math.floor(nx),Math.floor(ny),state)&&!blockingAt(state,Math.floor(nx),Math.floor(ny))) {unit.x=nx;unit.y=ny;}
     }
   }
 }

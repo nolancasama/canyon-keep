@@ -470,3 +470,132 @@ reference campaign could not start Siege 2). Gates stay road-passable.
 - Results separate already-earned bounty gold and readable per-type counts.
   Campaign completion totals bounty income from result history and labels the
   final siege rating as the final contract rating; no new scoring rule is added.
+
+## 2026-10-24 — The Frontier Commission stage (user brief, controller-frozen design)
+
+A second, independently selectable stage. The player is a hired engineer
+defending an *existing* settlement under a contract. The canyon campaign is
+untouched: its 110 existing tests must pass without edits to their assertions.
+
+Architecture
+- **Stage configs, not global rules.** A stage object supplies map, settlement,
+  siege schedule, rewards model, allowed tools and flags (`battleConstruction`,
+  `contractPayment`, `npcDefenders`, `growth`). The canyon stage config
+  reproduces current behaviour exactly; Frontier rules live in new modules
+  (`src/sim/frontier/*`, `src/data/frontier/*`) and are reached only through the
+  Frontier stage. Shared grid/pathing/structures/enemies/mechanisms are reused.
+- **Title screen** with "Canyon Keep Campaign" and "The Frontier Commission".
+  The canyon campaign starts exactly as before (`createGame()` default stays the
+  canyon so existing tests and harness keep working).
+- Same 64×36 grid; Frontier maps are open plains with authored terrain features
+  (river/ravine/rock outcrops as impassable `#`, fords/bridges), not the canyon.
+
+Contract economy (controller modifications to the brief, with reasons)
+- **The construction budget is the client's money, not earnings.** Unspent
+  budget is not paid to the player (otherwise "build nothing, pocket the budget"
+  dominates). It *is* the only source of battle-time makeshift construction —
+  holding gold in reserve is the trade-off.
+- **Assessed value** is recorded at contract acceptance: `value × hp/maxHp`.
+  Liability per building = `assessed × (hpStart − hpEnd)/hpStart`; destroyed ⇒
+  the full assessed value (one charge, never partial + destroyed). Pre-existing
+  damage is never charged. Mayor deduction = liability × `damageLiability`
+  (config, ~0.5) + per-civilian casualty penalty, capped at the base fee:
+  payment is clamped to ≥ 0, no debt.
+- **Mandatory objective fails ⇒ contract failed:** no base fee, no mayor
+  bonuses. Owner rewards for promised buildings that survived are still paid by
+  their owners (independent parties); kill bounties stay earned.
+- Earnings are listed in three separate groups: mayor payment (itemized),
+  owner rewards (promised + thank-you), kill bounties. Results are computed once
+  and flagged paid; retry restores the pre-siege snapshot and cannot duplicate.
+- **Unpromised thank-you payments:** deterministic — each unpromised civilian
+  building with assessed value ≥ a threshold that took no siege damage pays
+  `thankYouRate` of its value; total capped (config).
+- **Rating** from value-preserved %, casualties, mandatory/special objectives and
+  promises kept: Exceptional Engineering / Strong Defense / Acceptable Defense /
+  Costly Victory / Contract Failed, each with stated reasons. Kills don't count.
+
+Promises & negotiation
+- Requests appear as markers on owners' buildings; a panel shows owner, building,
+  condition, value and *why* it matters (one line per building type). Options:
+  Promise / Decline / Ask more (requires Communication ≥ stated level, +50%
+  reward, deterministic) / "Defend it yourselves" (owner self-defends with NPC
+  barricades or a hired guard per that owner's rule; no reward, no promise).
+- Broken promise: reward lost, reputation −1 (contract-local, shown in rating
+  reasons). Declining costs nothing. Contract journal lists all of it.
+- Workshop "funds for your next commission" becomes an immediate payment: there
+  is no cross-contract economy in this pass.
+
+NPCs
+- Simple state machines only. Guards hold a post (keep by default), engage
+  enemies within a radius, return to post; militia likewise for a district, are
+  weaker, and retreat below 30% HP. Civilians evacuate along walkable paths to the
+  keep at siege start; walls block them, gates pass friendlies.
+- **Reassignment moves existing guards** (the keep's count visibly drops). It is
+  a mayor request gated by Communication with a stated rule (e.g. "Comm 2: up to
+  2 guards", "Comm 3: up to 4"). No battle micromanagement.
+- NPC self-defense structures are placed at Start Siege on free tiles adjacent
+  to their building, never over player structures, never sealing the trade
+  route or a building's last access; skipped deterministically otherwise. They
+  never cost the player's budget.
+
+Two construction classes
+- Class A (wall, gate, towers, spiked, golem, launcher, sensor, retractable,
+  pendulum): preparation only. Class B (barricade, palisade, caltrops):
+  prep or battle. Frontier only; the canyon gets no battle construction.
+- Battle build: costs budget gold (×1.0), hard cap per siege (`emergencyCap`
+  gold) and a max of 3 sites under construction at once; build time 2.0 s base
+  minus Field Engineering. The site is non-blocking while building; it completes
+  only when no enemy/NPC occupies it (waits, like retractable walls). Cannot
+  place within 1 tile of an enemy, on rubble of a destroyed Class A piece in the
+  same siege, or where it would seal every enemy route to the keep. No battle
+  demolition or refunds. Kill bounties never refill the budget.
+
+Skills (Milestone E)
+- Four skills, starter values Communication 2, Structural 1, Field 1,
+  Mechanical 1, max 4. Each level has one visible effect (Structural +5% Class A
+  HP per level above 1; Field −0.3 s build time per level above 1; Mechanical
+  −8% device cooldown per level above 1; Communication gates options). Effects
+  apply only in Frontier. A completed contract grants 1 development point
+  (2 for Exceptional); the career record is kept by the UI in localStorage
+  (try/catch, optional) and passed into the sim as plain data.
+
+Procedural contracts (Milestone F)
+- Seeded and template-guided: authored terrain patterns × procedural building
+  clusters for three archetypes (Compact Town, Twin Settlements, Town + Outpost).
+  Validation as listed in the brief; deterministic reject-and-reseed up to N
+  tries, then the handcrafted fallback. Seed shown; "Generate New Contract",
+  "Replay Contract", "Enter Seed" added only after generator tests pass.
+  Twin Settlements: both keeps mandatory and the budget is shared.
+
+Deferred / rejected for this pass
+- Cross-contract economy and persistent reputation; elaborate social sim.
+- Titan's Pendulum only appears on Frontier maps that author a pendulum site.
+
+## 2026-10-24 — Frontier Commission slice 1 implementation decisions
+
+- Stage descriptors supply terrain, settlement selection, siege data, payment
+  model, tool list, targeting and feature flags. An absent stage ID resolves to
+  the canyon descriptor, preserving default factory state and numeric seeds.
+  Frontier selection constructs a fresh independent contract; the UI alone
+  opens the title at boot. Stage-aware grid queries retain their original
+  two-argument canyon behavior.
+- Owned properties remain in the shared structure list, so all existing damage,
+  explosions and occupancy systems apply. Owner metadata extends the existing
+  civilian tool-protection rule to shops, warehouses and the workshop, including
+  destroyed footprints. Property-specific flow fields reuse the shared breach
+  algorithm and revision invalidation; each raider commits to at most one
+  property before returning to the keep route. The Frontier brute ignores
+  civilian/golem distractions and advances along the keep breach field.
+- Acceptance assessments are independent of the Start Siege retry snapshot.
+  Each property contributes one current loss against its acceptance HP. Cash
+  values round to cents after calculation; pre-existing damage is excluded.
+  Finalization records paid results once and never puts earnings into client
+  construction gold. Failure still honors surviving independent owner promises.
+- The workshop's immediate payment is a conditional owner advance, shown in
+  the contract earnings ledger at acceptance and reconciled in final owner
+  rewards. Breaking its promise yields zero final reward, without debt or a
+  negative construction budget. This preserves both the immediate-payment
+  request and the frozen broken-promise rule within a single contract.
+- Slice 1 records self-defense intent and renders already-posted static keep
+  guards. NPC AI, guard reassignment, emergency construction, skill advancement
+  and procedural generation are deliberately deferred to their named slices.

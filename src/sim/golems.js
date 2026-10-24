@@ -8,7 +8,7 @@ function knockback(state,enemy,golem) {
   const spec=CONFIG.golem,pieces=Math.ceil(spec.knockback/spec.knockbackStep);
   for(let i=0;i<pieces;i++) {
     const nx=enemy.x+dx/length*spec.knockback/pieces,ny=enemy.y+dy/length*spec.knockback/pieces;
-    if(!isWalkable(Math.floor(nx),Math.floor(ny))||blockingAt(state,Math.floor(nx),Math.floor(ny))) break;
+    if(!isWalkable(Math.floor(nx),Math.floor(ny),state)||blockingAt(state,Math.floor(nx),Math.floor(ny))) break;
     enemy.x=nx;enemy.y=ny;
   }
   enemy.walkTarget=null;
@@ -37,7 +37,7 @@ export function stepGolems(state,dt) {
         nx=golem.originX+(nx-golem.originX)/fromOrigin*spec.leash;
         ny=golem.originY+(ny-golem.originY)/fromOrigin*spec.leash;
       }
-      if(isWalkable(Math.floor(nx),Math.floor(ny))&&!blockingAt(state,Math.floor(nx),Math.floor(ny))) {golem.x=nx;golem.y=ny;}
+      if(isWalkable(Math.floor(nx),Math.floor(ny),state)&&!blockingAt(state,Math.floor(nx),Math.floor(ny))) {golem.x=nx;golem.y=ny;}
     }
     if(golem.attackCooldown>1e-8 || !state.enemies.some(e=>e.hp>0&&Math.hypot(e.x-golem.x,e.y-golem.y)<=spec.radius+1e-8)) continue;
     golem.attackCooldown=spec.interval;

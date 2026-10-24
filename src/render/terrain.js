@@ -141,3 +141,23 @@ export function createTerrain() {
   const vignette=c.createRadialGradient(w/2,h/2,h*.32,w/2,h/2,w*.58);vignette.addColorStop(0,'#07131500');vignette.addColorStop(1,'#07131550');c.fillStyle=vignette;c.fillRect(0,0,w,h);
   return canvas;
 }
+
+export function createFrontierTerrain(map){
+  const canvas=document.createElement('canvas');canvas.width=WIDTH*TILE;canvas.height=HEIGHT*TILE;const c=canvas.getContext('2d');
+  c.fillStyle='#899568';c.fillRect(0,0,canvas.width,canvas.height);
+  for(let y=0;y<HEIGHT;y++)for(let x=0;x<WIDTH;x++){
+    const px=x*TILE,py=y*TILE,t=map.map[y][x];
+    if(t==='C'||t==='K'){c.fillStyle='#a1a37a';c.fillRect(px,py,TILE,TILE);}
+    for(let n=0;n<3;n++){c.fillStyle=n?'#d2cf9a24':'#3e593130';c.fillRect(px+noise(x,y,n)*18,py+noise(x,y,n+6)*18,2,1);}
+    if(t==='#'){
+      const river=(map.features||[]).some(f=>f.kind==='river'&&x>=f.x&&x<f.x+f.w&&y>=f.y&&y<f.y+f.h);
+      if(river){c.fillStyle='#3d7278';c.fillRect(px,py,TILE,TILE);lineWater(c,px,py,x,y);}
+      else{c.fillStyle='#4e5b4c';c.fillRect(px,py,TILE,TILE);c.fillStyle='#909783';c.beginPath();c.moveTo(px+2,py+13);c.lineTo(px+6,py+3);c.lineTo(px+15,py+2);c.lineTo(px+19,py+12);c.lineTo(px+13,py+18);c.closePath();c.fill();c.strokeStyle='#c1c0a4';c.stroke();}
+    }
+    if(t==='S'){c.fillStyle='#b5563d';c.beginPath();c.moveTo(px+16,py+4);c.lineTo(px+5,py+10);c.lineTo(px+16,py+16);c.closePath();c.fill();}
+  }
+  for(const r of map.roads||[]){c.fillStyle='#c4af7f';c.fillRect(r.x*TILE,r.y*TILE,TILE,TILE);c.fillStyle='#e0cb9730';c.fillRect(r.x*TILE+3,r.y*TILE+8,12,3);}
+  c.strokeStyle='#cfca8b55';c.lineWidth=1;c.setLineDash([5,5]);for(const d of map.districts||[])if(d.w&&d.h)c.strokeRect(d.x*TILE,d.y*TILE,d.w*TILE,d.h*TILE);c.setLineDash([]);
+  return canvas;
+}
+function lineWater(c,px,py,x,y){c.strokeStyle='#9bc1bd70';c.lineWidth=1;c.beginPath();c.moveTo(px+3,py+6+noise(x,y)*6);c.lineTo(px+15,py+8+noise(x,y)*6);c.stroke();}

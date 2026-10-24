@@ -1,11 +1,12 @@
 import { CONFIG } from '../config.js';
-import { SITES, SPAWNS, WIDTH } from '../data/map.js';
+import { WIDTH } from '../data/map.js';
 import { tileAt, structureAt, isWalkable, emit, blocksStructure } from './grid.js';
 import { initializeMechanism, pruneLinks } from './mechanisms.js';
+import { stageFor } from '../data/stages.js';
 
 const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const failure = (reason, cost = 0) => ({ valid: false, ok: false, reason, cost });
-const clientOwned = s => s && ['keep', 'house', 'farm'].includes(s.type);
+const clientOwned = s => s && (!!s.owner || ['keep', 'house', 'farm'].includes(s.type));
 const clientReason = 'The settlement owns houses, farms and the keep; player tools cannot change them';
 
 function supported(state, tower, excludedId = null) {
@@ -16,21 +17,21 @@ function supported(state, tower, excludedId = null) {
 }
 
 function losesTowerSupport(state, target) {
-  return state.structures.some(s => !s.destroyed && s.hp > 0 && s.type === 'tower' && tileAt(s.x, s.y) !== 'C' &&
+  return state.structures.some(s => !s.destroyed && s.hp > 0 && s.type === 'tower' && tileAt(s.x, s.y, state) !== 'C' &&
     supported(state, s) && !supported(state, s, target.id));
 }
 
 // Gates and the keep are traversable for merchants; all other buildings block.
 function tradeRoadRegion(state, candidate = null) {
   const blocked = (x, y) => {
-    if (!isWalkable(x, y)) return true;
+    if (!isWalkable(x, y, state)) return true;
     const s = candidate && x >= candidate.x && y >= candidate.y &&
       x < candidate.x + candidate.w && y < candidate.y + candidate.h
       ? candidate : structureAt(state, x, y);
     return blocksStructure(s) && s.type !== 'gate' && s.type !== 'keep';
   };
   const seen = new Set();
-  const queue = SPAWNS.filter(s => !blocked(s.x, s.y)).map(s => ({ x: s.x, y: s.y }));
+  const queue = stageFor(state).map.spawns.filter(s => !blocked(s.x, s.y)).map(s => ({ x: s.x, y: s.y }));
   for (const s of queue) seen.add(s.y * WIDTH + s.x);
   for (let i = 0; i < queue.length; i++) {
     const { x, y } = queue[i];
@@ -72,6 +73,7 @@ export function refundValue(structure) {
 }
 
 export function placement(state, type, x, y, { line = false } = {}) {
+  if (CONFIG.structures[type] && !stageFor(state).allowedTools.includes(type) && !['keep','house','farm'].includes(type)) return failure(stageFor(state).id==='canyon'?'Select a construction tool':'This contract does not provide that tool');
   if (['keep', 'house', 'farm'].includes(type)) return failure(clientReason);
   const def = CONFIG.structures[type];
   if (!def || type === 'keep') return failure('Select a construction tool');
@@ -91,7 +93,7 @@ export function placement(state, type, x, y, { line = false } = {}) {
   }
   if (line && existing?.type === type) return { valid: true, ok: true, reason: '', cost: 0, skipped: true };
   if (type === 'pendulum') {
-    const site = SITES.find(s => s.x === x && s.y === y);
+    const site = stageFor(state).map.sites.find(s => s.x === x && s.y === y);
     if (!site) return failure('Choose one of the three cliff mount sites', def.cost);
     if (state.pendulum) return failure('Only one Titan\'s Pendulum may be built', def.cost);
     if (state.gold < def.cost) return failure('Not enough gold', def.cost);
@@ -99,11 +101,11 @@ export function placement(state, type, x, y, { line = false } = {}) {
   }
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const tx = x + dx, ty = y + dy;
-    if (tx < CONFIG.spawnSafeColumns) return failure('Keep the spawn approach clear', cost);
-    if (!'.C'.includes(tileAt(tx, ty))) return failure('Build on canyon or castle floor', cost);
+    if (stageFor(state).id==='canyon' ? tx < CONFIG.spawnSafeColumns : stageFor(state).map.spawns.some(s=>Math.abs(s.x-tx)<CONFIG.spawnSafeColumns)) return failure('Keep the spawn approach clear', cost);
+    if (!'.C'.includes(tileAt(tx, ty, state))) return failure('Build on canyon or castle floor', cost);
     if (structureAt(state, tx, ty)) return failure('Another structure occupies this tile', cost);
   }
-  if (type === 'tower' && tileAt(x, y) !== 'C' && !supported(state, { x, y })) {
+  if (type === 'tower' && tileAt(x, y, state) !== 'C' && !supported(state, { x, y })) {
     return failure('Canyon towers must adjoin a supporting wall', def.cost);
   }
   if (state.gold < cost) return failure('Not enough gold', cost);
@@ -118,7 +120,7 @@ export function place(state, type, x, y, options) {
   const id = `${type}-${state.nextId++}`;
   let structure;
   if (type === 'pendulum') {
-    const site = SITES.find(s => s.id === check.siteId);
+    const site = stageFor(state).map.sites.find(s => s.id === check.siteId);
     structure = { ...site, id, type, siteId: site.id,
       cost: def.cost, paidCost: def.cost, status: 'ready', angle: site.centerAngle-site.halfSweep,
       elapsed: 0, swingId: 0, hitIds: [] };

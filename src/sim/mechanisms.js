@@ -76,7 +76,7 @@ export function launcherLane(state,device,from = 0) {
   let range=CONFIG.launcher.range;
   for(let step=Math.max(1,Math.floor(from+.5));step<=Math.ceil(range);step++) {
     const tx=Math.floor(x+dx*step),ty=Math.floor(y+dy*step);
-    if(!isWalkable(tx,ty)||blockingAt(state,tx,ty)) {range=Math.min(range,Math.max(from,step-.5));break;}
+    if(!isWalkable(tx,ty,state)||blockingAt(state,tx,ty)) {range=Math.min(range,Math.max(from,step-.5));break;}
   }
   return {x,y,dx,dy,range,endX:x+dx*range,endY:y+dy*range};
 }

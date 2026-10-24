@@ -51,7 +51,7 @@ function hitSweep(state,pendulum,site,previousAngle) {
       const pieces=Math.ceil(config.knockback/config.knockbackStep);
       for(let i=0;i<pieces;i++) {
         const nx=enemy.x+tangent.x*config.knockback/pieces,ny=enemy.y+tangent.y*config.knockback/pieces;
-        if(!isWalkable(Math.floor(nx),Math.floor(ny))||blockingAt(state,Math.floor(nx),Math.floor(ny))) break;
+        if(!isWalkable(Math.floor(nx),Math.floor(ny),state)||blockingAt(state,Math.floor(nx),Math.floor(ny))) break;
         enemy.x=nx;enemy.y=ny;
       }
       enemy.walkTarget=null;
