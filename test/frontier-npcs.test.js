@@ -23,7 +23,7 @@ test('Frontier guards engage near their assigned post, pay bounties and return t
   stepFrontierNpcs(state,1/60);
   assert.equal(guard.status,'engaging');assert.equal(guard.targetId,enemy.id);
   advance(state,10);
-  assert.equal(enemy.hp,0);assert.equal(state.stats.bountyGold,CONFIG.bounties.foot);assert.equal(state.gold,budget);
+  assert.equal(enemy.hp,0);assert.equal(state.stats.bountyGold,CONFIG.bounties.foot);assert.equal(state.gold,budget+CONFIG.bounties.foot);
   assert.equal(guard.status,'holding');assert.equal(guard.x,guard.postX);assert.equal(guard.y,guard.postY);
   spawnEnemy(state,'foot',15.5,18.5);advance(state,1);
   assert.equal(guard.status,'holding','enemies beyond the post leash cannot pull defenders away');

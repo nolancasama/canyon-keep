@@ -47,7 +47,7 @@ export function stepExplosions(state) {
       if(distance<=config.radius) npc.hp=Math.max(0,npc.hp-config.unitDamage*falloff(distance));
     }
     const tiles=structureTiles(state,blast.x,blast.y,config.radius).slice(0,config.structureTileCap);
-    for(const tile of tiles) damageStructure(state,tile.structure,config.structureDamage*falloff(tile.distance));
+    for(const tile of tiles) damageStructure(state,tile.structure,config.structureDamage*falloff(tile.distance),'enemy');
     emit(state,'explosion',{x:blast.x,y:blast.y,radius:config.radius,structureTiles:tiles.map(t=>({x:t.x,y:t.y,id:t.structure.id})),sourceId:blast.sourceId});
   }
 }

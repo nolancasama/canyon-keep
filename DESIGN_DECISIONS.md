@@ -838,3 +838,103 @@ handcrafted Frontier contract keeps its layout and east-only schedule as the
   vertically. Centre jitter is ±3×±2 tiles plus ±2×±1 keep jitter (≤6.5 tiles).
 - Same seed across archetypes shares the first RNG draws, so plans/terrain can
   look alike between archetypes on one seed; accepted (seeds still differ).
+
+## 2026-10-25 — Fortress Engineer & Garrison update: frozen design (controller)
+
+Scope and preservation
+- **Frontier-only changes.** Gate HP 130, reusable golems, emergency repairs,
+  spendable bounties, garrisons, infirmary, archers and cavalry apply only to
+  `stageId==='frontier'`. The canyon campaign keeps gate 180 HP, its one-shot
+  golem and its existing bounty flow, because preserving the authored
+  three-siege balance outranks a global stat change. Rejected: global gate/golem
+  changes (would silently rebalance the reference campaign fixtures).
+- The handcrafted Frontier contract keeps its 4 footmen (its fixtures depend on
+  them); generated contracts get seeded garrisons.
+
+Economy
+- **Funding order in battle:** emergency spending (Class B sites and repairs)
+  draws client funds first, up to the existing 120 G client emergency allowance,
+  then earned bounty gold, which has no cap. The HUD shows one combined
+  treasury; the ledger keeps `clientEmergencySpent`, `bountyEarned`,
+  `bountySpent` separately. Spam stays limited by build time, 3 simultaneous
+  sites, a cap of 12 living makeshift (Class B) structures, placement rules,
+  and no rebuilding destroyed Class A.
+- **Final pay:** engineer earnings include only *unspent* bounty
+  (`bountyEarned - bountySpent`); results list gross bounty, battlefield
+  spending and unspent bounty. Unspent client funds stay the client's.
+- Retry restores the pre-siege snapshot including the ledger; death bounties
+  are keyed by enemy id so repeated death processing pays once.
+
+Repairs
+- **Pay-as-you-go:** emergency repair is charged per HP actually restored, at
+  1.5× the preparation repair price per HP. An interrupted or unaffordable
+  repair stops; HP already restored is kept and was already paid; nothing is
+  reserved or refunded. Rejected: up-front reservation (refund edge cases).
+- Allowance 25% of max HP per structure per siege, cumulative; one repair
+  restores the remaining allowance over 5 s × Field multiplier
+  (L1 1.0, L2 0.85, L3 0.7, L4 0.55). Blocked within 3 sim-seconds of the last
+  enemy damage event; damage during repair interrupts it.
+
+Engineer creation
+- All skills start at 1 + 3 free points, each ≤ 3 at creation; 4 via career.
+  Presets: Diplomat C3 S1 F2 M1; Fortress Expert C1 S3 F2 M1;
+  Field Engineer C2 S1 F3 M1; Mechanist C1 S2 F1 M3.
+- **Legacy careers** (existing v1 record with any progression) keep their
+  skills/points untouched and are only asked for a name and portrait. An
+  untouched default record counts as no career. Starting a new career discards
+  the old progression, so re-creating never yields free points.
+- Reputation = average rating score of the last 10 contracts; history keeps
+  the last 20 (seed, archetype, rating, earnings).
+
+Garrisons
+- Strength budget: footman 1, archer 1.2, cavalry 2. Any non-empty subset of
+  types is valid; seeded from size, wealth, archetype and difficulty; cavalry
+  weighted down in poor settlements but never forbidden.
+- **Archer wall network:** nodes are intact wall/gate/spiked/dormant-golem
+  tiles and integrated towers, 4-connected. Access points are towers, the two
+  wall tiles flanking a gate (gatehouse stairs) and walls touching the keep.
+  Archers never occupy ground collision; if their tile is destroyed they drop
+  to an adjacent walkable tile, take fall damage and are briefly stunned.
+  Without reachable battlements they fight from the ground near the keep.
+- **Cavalry** sortie through intact friendly gates only, using the friendly
+  route graph (gates passable, walls not); slower in caltrops and narrow
+  tiles; with no route home they shelter outside the nearest gate and fight
+  defensively.
+- Infirmary per keep: 2 patients, 3 HP/s each, 120 HP pool per siege;
+  conventional units only, never while fighting, stops if the keep falls.
+
+Golems (Frontier)
+- Dormant 240 HP, active 160 HP max, HP fraction preserved across forms.
+  Guard leash 1.5 tiles, Patrol 4 tiles; 20 s active, 30 s cooldown.
+  Mechanical: cooldown −8/16/24% (L2–4), return speed +10/15% (L3–4).
+  Manual release or auto-awaken at ≤ 50%. If the breach is occupied the golem
+  waits nearby and keeps fighting until it can reform (no timeout death); a
+  dead golem leaves the breach open for the siege.
+
+## 2026-10-25 — Frontier Commission Phase A implementation notes
+
+- Implements only the frozen economy, emergency repair, gate and breach-routing
+  rules. Later garrison, character, infirmary and golem work remains deferred.
+- The true preparation state is cloned before battle initialization. Battle
+  initialization takes remaining prep gold as the client balance and clears
+  attempt-local ledger/death IDs/repair state. Retry restores every original
+  field, and starting again creates the same baseline without farmable earnings.
+- `emergency.constructionFunds` is remaining client money in battle; `spent`
+  remains a compatibility total of construction plus repairs. Dedicated source
+  and purpose fields are authoritative. Payment uses fractional HP/gold; existing
+  whole-gold final-payment rounding is unchanged. Results explicitly distinguish
+  spending from bounty amounts so only unspent bounty contributes to earnings.
+- Makeshift capacity includes surviving player prep works and reserved sites;
+  client/NPC self-defense pieces are excluded from the player's twelve slots.
+- A repair limited by missing HP restores that amount over the full configured
+  Field-adjusted duration. Starting requires positive spendable funds, permitting
+  partial repairs; cancellation is a headless API action and retains cumulative
+  allowance. Enemy melee/slams and powder blasts carry an explicit enemy damage
+  source; pendulum friendly fire does not reset the damage-free timer.
+- Major-road exits are actual road tiles on the boundary or adjacent to a spawn
+  (the handcrafted road ends just before its eastern spawn). Each living keep
+  requires friendly access to every such exit. The advisory names failed pairs.
+  Auto-gates belong to wall-line placement; a deliberate single wall replacement
+  preserves all mandatory routes. Footpath/decorative metadata is ignored.
+- Frontier breach costs are per-type HP weights with a gate multiplier, cached
+  by enemy type/target/revision. Canyon keeps the original shared field/costs.

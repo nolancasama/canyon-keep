@@ -125,7 +125,7 @@ test('occupied emergency sites wait for enemies and NPCs, then complete without 
   until(game,()=>!!structureAt(game.state,8,21));
 });
 
-test('three-site limit and emergency cap are enforced and bounties cannot replenish either budget',()=>{
+test('three-site limit and client emergency cap are enforced; bounty can fund further makeshift construction',()=>{
   const game=battle();
   for(let i=0;i<3;i++) requireAction(game.api.place('caltrops',7+i,12),'three concurrent sites');
   assert.equal(game.api.place('caltrops',10,12).ok,false);
@@ -136,9 +136,14 @@ test('three-site limit and emergency cap are enforced and bounties cannot replen
   }
   assert.equal(game.state.emergency.spent,CONFIG.frontier.emergencyCap);
   const gold=game.state.gold;
-  const enemy=spawnEnemy(game.state,'foot',50.5,20.5);damageEnemy(game.state,enemy,1000);
-  assert.equal(game.state.gold,gold);assert.equal(game.state.emergency.spent,CONFIG.frontier.emergencyCap);
+  const enemy=spawnEnemy(game.state,'boss',50.5,20.5);damageEnemy(game.state,enemy,10000);
+  assert.equal(game.state.gold,gold+CONFIG.bounties.boss);assert.equal(game.state.emergency.spent,CONFIG.frontier.emergencyCap);
+  // Twelve living structures still cap spam even when bounty funds are ready.
   assert.equal(game.api.place('barricade',10,12).ok,false);
+  const hazard=game.state.structures.find(s=>s.type==='caltrops');hazard.hp=0;hazard.destroyed=true;
+  requireAction(game.api.place('barricade',10,12),'bounty-funded replacement site');
+  assert.equal(game.state.emergency.clientEmergencySpent,CONFIG.frontier.emergencyCap);
+  assert.equal(game.state.emergency.bountySpent,CONFIG.structures.barricade.cost);
 });
 
 test('a blocking site cannot seal the last enemy route, including all reserved footprints',()=>{

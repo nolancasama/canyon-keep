@@ -4,13 +4,16 @@ import { isWalkable, tileAt, structureAt, blocksStructure } from './grid.js';
 
 const directions = [[1,0],[0,1],[-1,0],[0,-1]];
 const index = (x,y) => y * WIDTH + x;
-function cost(state,x,y) {
+function cost(state,x,y,enemyType) {
   const structure = structureAt(state,x,y);
-  return CONFIG.floorMovementCost + (blocksStructure(structure) && structure.type !== 'keep' ? structure.hp * CONFIG.breachCostPerHp : 0);
+  const weights=state.stageId==='frontier'?CONFIG.frontier.breachWeights[enemyType??'foot']:null;
+  const breach=weights?.hp??CONFIG.breachCostPerHp;
+  return CONFIG.floorMovementCost + (blocksStructure(structure) && structure.type !== 'keep' ?
+    structure.hp * breach * (structure.type==='gate'?(weights?.gate??1):1) : 0);
 }
 
 // Reverse Dijkstra: a predecessor pays the cost of entering the current tile.
-function buildFlow(state, target) {
+function buildFlow(state, target, enemyType) {
   const distances = Array(WIDTH * HEIGHT).fill(null);
   const heap = [];
   function push(node) {
@@ -46,7 +49,7 @@ function buildFlow(state, target) {
   while (heap.length) {
     const [distance,x,y] = pop();
     if (distance !== distances[index(x,y)]) continue;
-    const stepCost = cost(state,x,y);
+    const stepCost = cost(state,x,y,enemyType);
     for (const [dx,dy] of directions) {
       const nx=x+dx, ny=y+dy;
       if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny,state)) continue;
@@ -61,10 +64,13 @@ function buildFlow(state, target) {
 
 export function rebuildFlow(state) { state.flow=buildFlow(state);return state.flow; }
 
-export function nextStep(state,x,y,target=null) {
+export function nextStep(state,x,y,target=null,enemyType='foot') {
   if (!state.flow || state.flow.revision !== state.flowRevision) rebuildFlow(state);
   let flow=state.flow;
-  if(target) {
+  if(state.stageId==='frontier'&&(target||enemyType!=='foot')) {
+    const key=`${target?.id??'keep'}:${enemyType}`,cached=(state.breachFlows??={})[key];
+    flow=cached?.revision===state.flowRevision?cached:(state.breachFlows[key]=buildFlow(state,target,enemyType));
+  } else if(target) {
     const cached=(state.propertyFlows??={})[target.id];
     flow=cached?.revision===state.flowRevision?cached:(state.propertyFlows[target.id]=buildFlow(state,target));
   }
@@ -75,10 +81,10 @@ export function nextStep(state,x,y,target=null) {
     if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny,state)) continue;
     const distance=flow.distances[index(nx,ny)];
     if (distance===null) continue;
-    const total=distance+cost(state,nx,ny);
+    const total=distance+cost(state,nx,ny,enemyType);
     if (total<bestCost) { bestCost=total; best={x:nx,y:ny}; }
   }
   return best;
 }
 
-export const nextStepTo = (state,x,y,target) => nextStep(state,x,y,target);
+export const nextStepTo = (state,x,y,target,enemyType) => nextStep(state,x,y,target,enemyType);

@@ -4,6 +4,7 @@ import { stageFor } from '../../data/stages.js';
 import { isWalkable, tileAt, structureAt, blocksStructure, emit } from '../grid.js';
 import { damageEnemy } from '../enemies.js';
 import { emergencyBuildTime } from './skills.js';
+import { initializeBattleEconomy, availableEmergencyGold, spendEmergencyGold } from './economy.js';
 
 export const CLASS_B=['barricade','palisade','caltrops'];
 const fail=(reason,cost=0)=>({ok:false,valid:false,reason,cost});
@@ -38,8 +39,9 @@ export function emergencyPlacement(state,type,x,y) {
   if(!CLASS_B.includes(type)) return fail('Class A construction is preparation only',cost);
   if(!Number.isInteger(x)||!Number.isInteger(y)) return fail('Choose a map tile',cost);
   if((state.constructionSites??[]).length>=rules.maxConstructionSites) return fail('Only 3 construction sites at once',cost);
-  if((state.emergency?.spent??0)+cost>rules.emergencyCap) return fail('Emergency supplies cap reached',cost);
-  if(state.gold<cost) return fail('Not enough gold',cost);
+  const living=state.structures.filter(s=>CLASS_B.includes(s.type)&&!s.npcOwned&&!s.owner&&!s.destroyed&&s.hp>0).length;
+  if(living+(state.constructionSites??[]).length>=rules.maxMakeshiftStructures) return fail(`Only ${rules.maxMakeshiftStructures} living makeshift structures at once`,cost);
+  if(availableEmergencyGold(state)<cost) return fail('Not enough emergency gold (client allowance or bounties)',cost);
   for(let dy=0;dy<def.h;dy++) for(let dx=0;dx<def.w;dx++) {
     const tx=x+dx,ty=y+dy;
     if(!'.C'.includes(tileAt(tx,ty,state))) return fail('Build on open ground',cost);
@@ -56,16 +58,17 @@ export function emergencyPlacement(state,type,x,y) {
 export function placeEmergency(state,type,x,y) {
   const check=emergencyPlacement(state,type,x,y);
   if(!check.ok) return check;
-  const def=CONFIG.structures[type],rules=CONFIG.frontier;
+  const def=CONFIG.structures[type];
   const site={id:`site-${state.nextId++}`,type,x,y,w:def.w,h:def.h,elapsed:0,
     duration:emergencyBuildTime(state),status:'building'};
-  state.constructionSites.push(site);state.gold-=check.cost;state.emergency.spent+=check.cost;
+  spendEmergencyGold(state,check.cost,'construction');
+  state.constructionSites.push(site);
   emit(state,'constructionStarted',{structureId:site.id,typeOfStructure:type,x,y});
   return {...check,site};
 }
 
 export function startFrontierConstruction(state) {
-  state.constructionSites=[];state.emergency={spent:0,cap:CONFIG.frontier.emergencyCap};state.destroyedClassATiles=[];
+  state.constructionSites=[];initializeBattleEconomy(state);state.destroyedClassATiles=[];
 }
 
 export function stepFrontierConstruction(state,dt) {

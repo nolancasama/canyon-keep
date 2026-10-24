@@ -2,6 +2,7 @@ import { MAP, WIDTH, HEIGHT } from '../data/map.js';
 import { CONFIG } from '../config.js';
 import { rebuildFlow } from './pathing.js';
 import { stageFor } from '../data/stages.js';
+import { noteEnemyStructureDamage } from './frontier/repair.js';
 
 export function inBounds(x, y) {
   return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
@@ -31,10 +32,12 @@ export function emit(state, type, data = {}) {
   return event;
 }
 
-export function damageStructure(state, structure, damage) {
+export function damageStructure(state, structure, damage, source = 'environment') {
   if (!structure || structure.destroyed || structure.hp <= 0) return false;
   if (CONFIG.structures[structure.type]?.invulnerable || !blocksStructure(structure)) return false;
+  const hpBefore=structure.hp;
   structure.hp = Math.max(0, structure.hp - damage);
+  if(structure.hp<hpBefore&&source==='enemy'&&state.stageId==='frontier'&&state.phase==='siege') noteEnemyStructureDamage(state,structure);
   if(state.stageId==='frontier'&&state.phase==='siege'&&
     (structure.hp<=0||(structure.type==='golem'&&structure.hp<=structure.maxHp*CONFIG.golem.awakenFraction))&&
     ['wall','gate','tower','spiked','golem','launcher','sensor','retractable','pendulum'].includes(structure.type)) {

@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { WIDTH } from '../data/map.js';
+import { WIDTH, HEIGHT } from '../data/map.js';
 import { tileAt, structureAt, isWalkable, emit, blocksStructure } from './grid.js';
 import { initializeMechanism, pruneLinks } from './mechanisms.js';
 import { stageFor } from '../data/stages.js';
@@ -24,7 +24,7 @@ function losesTowerSupport(state, target) {
 }
 
 // Gates and the keep are traversable for merchants; all other buildings block.
-function tradeRoadRegion(state, candidate = null) {
+function tradeRoadRegion(state, candidate = null, starts = stageFor(state).map.spawns) {
   const blocked = (x, y) => {
     if (!isWalkable(x, y, state)) return true;
     const s = candidate && x >= candidate.x && y >= candidate.y &&
@@ -33,7 +33,7 @@ function tradeRoadRegion(state, candidate = null) {
     return blocksStructure(s) && s.type !== 'gate' && s.type !== 'keep';
   };
   const seen = new Set();
-  const queue = stageFor(state).map.spawns.filter(s => !blocked(s.x, s.y)).map(s => ({ x: s.x, y: s.y }));
+  const queue = starts.filter(s => !blocked(s.x, s.y)).map(s => ({ x: s.x, y: s.y }));
   for (const s of queue) seen.add(s.y * WIDTH + s.x);
   for (let i = 0; i < queue.length; i++) {
     const { x, y } = queue[i];
@@ -48,14 +48,37 @@ function tradeRoadRegion(state, candidate = null) {
 }
 
 export function hasTradeRoad(state, candidate = null) {
+  if(state.stageId==='frontier') return friendlyRoadRoutes(state,candidate).every(route=>route.ok);
   const seen = tradeRoadRegion(state, candidate);
   return state.structures.some(s => s.type === 'keep' && !s.destroyed && s.hp > 0 && seen.has(s.y * WIDTH + s.x));
+}
+
+// Authored/generated roads are the major road graph. Decorative features and
+// paths to individual lots never create extra boundary-route requirements.
+export function majorRoadExits(state) {
+  const map=stageFor(state).map;
+  const roads=map.roads??[],roadIds=new Set(roads.map(p=>p.y*WIDTH+p.x));
+  const unwrittenEntries=map.spawns.filter(spawn=>!roadIds.has(spawn.y*WIDTH+spawn.x));
+  return roads.filter(p=>p.x===0||p.y===0||p.x===WIDTH-1||p.y===HEIGHT-1||
+    unwrittenEntries.some(spawn=>Math.abs(spawn.x-p.x)+Math.abs(spawn.y-p.y)===1));
+}
+
+export function friendlyRoadRoutes(state,candidate=null) {
+  const exits=majorRoadExits(state),keeps=state.structures.filter(s=>s.type==='keep'&&!s.destroyed&&s.hp>0);
+  if(!exits.length) {
+    const seen=tradeRoadRegion(state,candidate);
+    return keeps.map(keep=>({keepId:keep.id,ok:seen.has(keep.y*WIDTH+keep.x),keep}));
+  }
+  return keeps.flatMap(keep=>{
+    const seen=tradeRoadRegion(state,candidate,[{x:keep.x,y:keep.y}]);
+    return exits.map(exit=>({keepId:keep.id,keep,exit,ok:seen.has(exit.y*WIDTH+exit.x)}));
+  });
 }
 
 export function blockedRoadTiles(state) {
   if (state.phase !== 'prep') return [];
   const seen = tradeRoadRegion(state);
-  if (state.structures.some(s => s.type === 'keep' && !s.destroyed && s.hp > 0 && seen.has(s.y * WIDTH + s.x))) return [];
+  if (hasTradeRoad(state)) return [];
   return state.structures.filter(s => !s.destroyed && s.hp > 0 && blocksStructure(s) && s.type !== 'gate' &&
     (CONFIG.structures[s.type]?.family === 'wall' || s.type === 'barricade') &&
     ORTHOGONAL.some(([dx, dy]) => seen.has((s.y + dy) * WIDTH + s.x + dx)))
@@ -90,6 +113,10 @@ export function placement(state, type, x, y, { line = false } = {}) {
   const interchangeable = existing && existing.type !== type && def.family &&
     def.family === CONFIG.structures[existing.type]?.family;
   if (interchangeable || wallToTower) {
+    if(state.stageId==='frontier'&&existing.autoGate&&type==='wall'&&
+      !hasTradeRoad(state,{type,x,y,w:def.w,h:def.h,hp:classAMaxHp(state,type,def.hp)})) {
+      return failure('Keep a friendly access route before replacing this road gate',cost);
+    }
     if (wallToTower && tileAt(x, y, state) !== 'C' && !supported(state, { x, y }, existing.id)) {
       return failure('Canyon towers must adjoin a supporting wall', cost);
     }
@@ -139,6 +166,7 @@ export function place(state, type, x, y, options) {
     const maxHp=classAMaxHp(state,type,def.hp);
     structure = { id, type, x, y, w: def.w, h: def.h, hp: maxHp,
       maxHp, cost: def.cost, paidCost: check.replacement ? def.cost : check.cost, destroyed: false };
+    if(options?.autoGate) structure.autoGate=true;
     initializeMechanism(structure, options);
     if (check.replacement) state.structures.splice(state.structures.findIndex(s => s.id === check.replacedId), 1, structure);
     else state.structures.push(structure);
@@ -161,20 +189,29 @@ export function lineTiles(x0, y0, x1, y1) {
   return result;
 }
 
+function lineType(state,type,x,y) {
+  return state.stageId==='frontier'&&state.phase==='prep'&&type==='wall'&&
+    stageFor(state).map.roads?.some(p=>p.x===x&&p.y===y)?'gate':type;
+}
+
 export function previewLine(state, type, x0, y0, x1, y1) {
   const scratch = { ...state, structures: state.structures.map(s => ({ ...s, ...(s.links ? { links: [...s.links] } : {}) })),
     inhabitants: state.inhabitants?.map(p => ({ ...p })),
     rubble: [...(state.rubble ?? [])], ...(state.constructionSites?{constructionSites:state.constructionSites.map(s=>({...s})),emergency:{...state.emergency}}:{}), events: [], eventLog: [] };
   let outOfGold = false;
   const tiles = lineTiles(x0, y0, x1, y1).map(({ x, y }) => {
-    if (outOfGold) return { x, y, ...failure('Not enough gold') };
-    const result = placement(scratch, type, x, y, { line: true });
-    if (result.valid) place(scratch, type, x, y, { line: true });
+    const segmentType=lineType(state,type,x,y),autoGate=segmentType!==type;
+    if (outOfGold) return { x, y, type:segmentType, autoGate, ...failure('Not enough gold') };
+    const result = placement(scratch, segmentType, x, y, { line: true });
+    if (result.valid) place(scratch, segmentType, x, y, { line: true, autoGate });
     else if (result.reason === 'Not enough gold') outOfGold = true;
-    return { x, y, ...result };
+    return { x, y, type:segmentType, autoGate, ...result };
   });
-  return { tiles, cost: tiles.filter(t => t.valid).reduce((n, t) => n + t.cost, 0),
-    totalCost: tiles.filter(t => t.valid).reduce((n, t) => n + t.cost, 0),
+  const netCost=tiles.filter(t=>t.valid).reduce((n,t)=>n+t.cost,0);
+  return { tiles, cost:netCost, netCost,
+    autoGates:tiles.filter(t=>t.autoGate&&!t.skipped).length,
+    totalCost: state.stageId==='frontier'?tiles.filter(t => t.valid&&!t.skipped).reduce((n, t) => n + price(state,t.type), 0):netCost,
+    refund:tiles.filter(t=>t.valid).reduce((n,t)=>n+(t.refund??0),0),
     reason: tiles.find(t => !t.valid)?.reason ?? '' };
 }
 
@@ -183,8 +220,9 @@ export function placeLine(state, type, x0, y0, x1, y1) {
   if (!CONFIG.structures[type]?.line) return failure('This tool places one building at a time');
   const results = [];
   for (const { x, y } of lineTiles(x0, y0, x1, y1)) {
-    const result = place(state, type, x, y, { line: true });
-    results.push({ x, y, ...result });
+    const segmentType=lineType(state,type,x,y),autoGate=segmentType!==type;
+    const result = place(state, segmentType, x, y, { line: true, autoGate });
+    results.push({ x, y, type:segmentType, autoGate, ...result });
     if (!result.ok && result.reason === 'Not enough gold') break;
   }
   return { ok: results.some(r => r.ok && !r.skipped), placed: results.filter(r => r.ok && !r.skipped).length,
@@ -251,6 +289,10 @@ export function capacity(state) {
 }
 
 export function readiness(state) {
+  if(state.stageId==='frontier') return friendlyRoadRoutes(state).map(route=>({
+    id:'tradeRoad',keepId:route.keepId,exit:route.exit,ok:route.ok,
+    message:`Mandatory route: ${route.keep.label??route.keepId} to road exit${route.exit?` (${route.exit.x}, ${route.exit.y})`:''} — ${route.ok?'accessible':'inaccessible to friendly units. Install a gate.'}`,
+  }));
   const road = hasTradeRoad(state);
   return [
     { id: 'tradeRoad', ok: road, message: road ? 'Castle entrance accessible' : 'Castle entrance blocked. Install a gate to create a route to the keep.' },

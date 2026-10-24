@@ -519,8 +519,17 @@ retain their original rule. Frontier ends in victory after all arrivals die and
 pending explosions finish, or failure when the mandatory keep falls; optional
 property or civilian losses alone never end the contract.
 
-Construction gold is the client's budget; unused funds are never earnings.
-Bounties are separate earnings and cannot refill it. At acceptance each property
+Construction gold is the client's budget; unused client funds are never earnings.
+Confirmed enemy deaths immediately add spendable bounties to the Frontier battle
+treasury, emit the existing floating `bounty` event and update siege stats once
+per enemy ID, regardless of kill source. The separate battle ledger retains
+`constructionFunds` (client balance), `clientEmergencySpent`, `bountyEarned`,
+`bountySpent`, `constructionSpending` and `repairSpending`. Emergency spending
+uses remaining client funds first, limited to 120 G client spending per siege,
+then unspent bounty without a bounty spending cap. The HUD shows the combined
+treasury, client allowance used and unspent bounty. Client funds above the
+remaining allowance stay visible but cannot fund additional emergency work.
+At acceptance each property
 records `assessed = value × hpStart/maxHp`. Its single liability entry is
 `assessed × (hpStart − hpEnd)/hpStart`, capped at full assessed value on
 destruction. Each assessment, damage line and payment line rounds deterministically
@@ -528,17 +537,22 @@ to whole gold before totals are summed; percentages use one decimal. Pre-existin
 damage is excluded. Mayor deductions itemize liability
 times `damageLiability` and civilian penalties, capped at the base fee; mayor
 payment is nonnegative. Failure pays no base fee or mayor bonuses, but surviving
-promised property owners still pay and earned bounties remain.
+promised property owners still pay and unspent bounties remain.
 
 Unpromised civilian properties above the assessed-value threshold which take no
 siege damage yield deterministic, capped thank-you payments. Results itemize
-mayor fees/bonuses/deductions, owner rewards and bounties separately, assessed
+mayor fees/bonuses/deductions, owner rewards and gross bounties separately, assessed
 value before/preserved, building/district damage, casualties, promises and final
 earnings. Rating uses preservation, casualties, objectives and promises, with
 reasons: Exceptional Engineering, Strong Defense, Acceptable Defense, Costly
 Victory or Contract Failed; kills do not influence it. Results finalize once
-and expose a paid flag. Retry restores the exact pre-siege snapshot, including
-budget, requests and owner ledger. Inspection retains damaged/destroyed property.
+and expose a paid flag. Results also show battlefield construction spending,
+emergency repair spending, client spending, bounty spent and unspent bounty.
+Final earnings add only `bountyEarned - bountySpent` to the otherwise unchanged
+mayor/owner/thank-you formula; finalization never credits the battle treasury
+again. Retry restores the exact pre-siege snapshot, including budget, all ledger
+fields, death IDs, requests and owner ledger; restart clears attempt earnings.
+Inspection retains damaged/destroyed property.
 
 Professional guards hold their assigned post, engage nearby reachable enemies
 within a leash and return. Weaker district militia retreat to the keep below
@@ -564,19 +578,62 @@ Frontier prep and battle. Palisades cost 12 G with 100 HP versus the existing
 enemy by 4 and slow it to 50% speed for 2 seconds, expiring after ten uses.
 All tuning lives in CONFIG; canyon retains its original tools and rules.
 
-Emergency construction spends remaining client gold at normal price, with a
-120 G per-siege cap and at most three simultaneous sites. Each non-blocking site
+Frontier gates have 130 base HP (canyon gates remain 180); ordinary walls remain
+200. Structural Engineering applies through `classAMaxHp` to the Frontier base.
+Gate cost is unchanged. Intact gates block enemies and are valid breach targets,
+pass friendly units, and leave traversable ground when destroyed.
+In preparation, a wall-tool line crossing an actual major road tile automatically
+uses a gate on that tile. Both generated `map.roads` and the handcrafted trade
+road qualify; decorative features and footpaths do not. Auto-gates use a blue
+preview and gate marker; line previews show gross purchase cost and net cost
+after replacement refunds. A later deliberate single wall placement can replace
+an auto-gate provided mandatory friendly access remains. Start Siege's advisory
+lists every mandatory keep-to-major-road-exit route and identifies inaccessible
+routes. Friendly route validation treats gates as passable and remains separate
+from enemy breach-cost pathing.
+
+Frontier enemy flows use configured per-type HP breach weights and gate cost
+multipliers: foot soldiers strongly prefer open routes, chiselers accept breaches
+and favor weaker gates, powder carriers favor accessible approaches, and bosses
+accept convenient breaches/openings. Positive obstacle costs ensure a cheaper
+open route beats attacking a wall. Fields are deterministic and cached by target,
+enemy type and flow revision; canyon retains its existing weights and behavior.
+
+Emergency construction spends the shared battle treasury at normal price, with
+the 120 G cap applying only to client funds. At most three simultaneous sites
+and twelve living player Class B structures are allowed; pending sites reserve
+slots and surviving preparation Class B works count. Client/NPC-owned defenses
+do not consume the player's limit. Each non-blocking site
 takes 2 seconds at starter Field 1 (hook: −0.3 seconds per additional Field
 level). A finished timer waits while a living enemy/NPC/golem occupies its
 footprint. Blocking sites also preserve an enemy route to the keep, counting
 reserved blocking sites. Placement refuses living enemies within one tile,
 overlap, protected property, and tiles of Class A works destroyed in this siege.
-Battle permits no demolition, repairs or refunds; bounties never refill client
-gold or the emergency allowance. Canyon has no battle construction.
+Battle permits no demolition or refunds. Canyon has no battle construction or
+emergency repairs.
+
+**Emergency Repair** is a Frontier siege tool with a palette button and `R` key.
+Only surviving, damaged, player-owned military Class A works qualify; never
+destroyed works, Class B, civilian/client buildings or a keep. Actual positive
+enemy damage records `lastEnemyDamageAt`; proximity and friendly fire do not.
+Repair is blocked on the hit timestamp ("Cannot repair — Wall is under attack.")
+and for three simulation seconds after a hit ("Cannot repair — Wait until 3
+seconds after the last hit."). Already-running repairs, exhausted allowance,
+ineligible targets and no spendable gold each give specific messages.
+Each structure may regain at most 25% of its maximum HP per siege, cumulatively
+across interruptions, cancellations and restarts. A repair restores its remaining
+allowance, limited by missing HP, over 5 s multiplied by Field L1/L2/L3/L4 factors
+1.0/0.85/0.7/0.55. It charges only HP actually restored at 1.5 times the continuous
+preparation repair price per HP (`cost * repairRate / maxHp`), using fractional
+HP/gold and the shared client-first funding order. It stops if funds run out.
+Any enemy damage during repair immediately marks it `interrupted`; restored HP
+and payment remain, no refund, and another three damage-free seconds are needed.
+Simulation time controls repair progress under pause/speed. A visible cyan progress
+ring and repair marker identify running repairs.
 
 The Frontier battle HUD shows mandatory objective HP, estimated value preserved,
 living civilians, active promises with current survival status, emergency
-supplies spent/cap, machine controls, pause and speed. Sites show a progress ring
+client emergency spent/cap and unspent bounty, machine controls, pause and speed. Sites show a progress ring
 and waiting state. Disabled Class A entries explain their prep-only restriction.
 The centered title has two labelled cards, descriptions and Play buttons, with
 construction/HUD/key hints hidden.

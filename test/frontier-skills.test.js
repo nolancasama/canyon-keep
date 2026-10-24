@@ -44,7 +44,7 @@ test('Structural raises every finite Class A max HP by exactly 5% per level, exc
   for(let level=1;level<=4;level++) {
     const game=createGame({stage:'frontier',skills:{structural:level}}),state=game.state;
     for(const type of ['wall','gate','tower','spiked','golem','launcher','sensor','retractable']) {
-      const hp=CONFIG.structures[type].hp;
+      const hp=type==='gate'?CONFIG.frontier.gateHp:CONFIG.structures[type].hp;
       close(classAMaxHp(state,type,hp),hp+hp*.05*(level-1));
     }
     for(const type of ['keep','house','farm','palisade','barricade','caltrops'])
@@ -52,7 +52,7 @@ test('Structural raises every finite Class A max HP by exactly 5% per level, exc
     const wall=placed(game,'wall',8,18),tower=placed(game,'tower',9,18),palisade=placed(game,'palisade',10,18);
     close(wall.hp,200+10*(level-1));assert.equal(wall.hp,wall.maxHp);
     close(tower.maxHp,250+12.5*(level-1));assert.equal(palisade.maxHp,100);
-    const gate=placed(game,'gate',8,18);close(gate.maxHp,180+9*(level-1));
+    const gate=placed(game,'gate',8,18);close(gate.maxHp,CONFIG.frontier.gateHp*(1+CONFIG.frontier.skills.structuralHpPerLevel*(level-1)));
     assert.equal(state.structures.find(s=>s.type==='keep').maxHp,CONFIG.structures.keep.hp);
   }
 });

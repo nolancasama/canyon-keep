@@ -19,6 +19,7 @@ export function skillEffects(skills) {
 }
 
 export function classAMaxHp(state,type,hp) {
+  if(state.stageId==='frontier'&&type==='gate') hp=CONFIG.frontier.gateHp;
   return state.stageId==='frontier'&&CLASS_A.includes(type)&&Number.isFinite(hp)?
     hp+hp*skillEffects(state.skills).structuralHpBonus:hp;
 }

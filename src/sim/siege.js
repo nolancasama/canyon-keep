@@ -14,6 +14,7 @@ import { stepFrontWarnings } from './frontier/fronts.js';
 import { startFrontierNpcs, stepFrontierNpcs } from './frontier/npcs.js';
 import { startFrontierConstruction, stepFrontierConstruction } from './frontier/construction.js';
 import { objectiveMet } from './frontier/contract.js';
+import { startFrontierRepairs, stepFrontierRepairs } from './frontier/repair.js';
 
 export function createSiegeState(state) {
   state.phase = 'siege';
@@ -31,7 +32,7 @@ export function createSiegeState(state) {
   state.stats = { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false,
     bountyGold: 0, bountyCounts: { foot: 0, chiseler: 0, powder: 0, boss: 0 } };
   if(siegeFor(state)?.plan) state.frontWarnings=[];
-  if(stageFor(state).flags.npcDefenders) {startFrontierConstruction(state);startFrontierNpcs(state);}
+  if(stageFor(state).flags.npcDefenders) {startFrontierConstruction(state);startFrontierRepairs(state);startFrontierNpcs(state);}
   else createInhabitants(state);
   rebuildFlow(state);
   emit(state, 'siegeStarted', { siegeIndex: state.siegeIndex });
@@ -55,6 +56,7 @@ export function stepSiege(state, dt = SIM_DT) {
   stepEnemies(state, dt);
   stepGolems(state, dt);
   stepMechanisms(state, dt);
+  if(state.stageId==='frontier') stepFrontierRepairs(state,dt);
   state.stats.inhabitantsLost = state.inhabitants.filter(i => i.hp <= 0).length;
   // Process newly killed carriers on the following tick, preserving their delay.
   const keep = state.structures.find(s => s.type === 'keep');

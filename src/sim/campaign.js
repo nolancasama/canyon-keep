@@ -11,6 +11,7 @@ import { STAGES, stageFor } from '../data/stages.js';
 import { initializeFrontier, respondToRequest, finalizeContract } from './frontier/contract.js';
 import { requestGuards, guardPosts } from './frontier/npcs.js';
 import { startFrontierConstruction, placeEmergency } from './frontier/construction.js';
+import { emergencyRepairCheck, startEmergencyRepair, cancelEmergencyRepair } from './frontier/repair.js';
 import { frontierSeed } from './frontier/generator.js';
 import { advancedScoutingStatus, purchaseAdvancedScouting, scoutingReport } from './frontier/fronts.js';
 
@@ -102,6 +103,9 @@ export function createGame(seed = CONFIG.seed) {
     advancedScoutingStatus: () => advancedScoutingStatus(state),
     purchaseAdvancedScouting: () => purchaseAdvancedScouting(state),
     placeEmergency: (type,x,y) => placeEmergency(state,type,x,y),
+    emergencyRepair: (x,y) => startEmergencyRepair(state,x,y),
+    previewEmergencyRepair: (x,y) => emergencyRepairCheck(state,x,y),
+    cancelEmergencyRepair: (x,y) => cancelEmergencyRepair(state,x,y),
     openBriefing() {
       if(!state.contract) return false;
       state.contract.briefingOpen=true;state.briefing=state.contract.briefing;return true;

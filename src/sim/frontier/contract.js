@@ -139,7 +139,11 @@ export function calculateContractResults(state) {
   const ownerRewardTotal=money(ownerRewards.reduce((n,r)=>n+r.amount,0));
   const thankYouTotal=money(thankYouPayments.reduce((n,r)=>n+r.amount,0));
   const bountyGold=state.stats.bountyGold??0;
-  const finalEarnings=money(mayorPayment+ownerRewardTotal+thankYouTotal+bountyGold);
+  const ledger=state.emergency;
+  const bountyEarned=ledger?.bountyEarned??bountyGold,bountySpent=ledger?.bountySpent??0;
+  const unspentBounty=Math.max(0,bountyEarned-bountySpent);
+  const constructionSpending=ledger?.constructionSpending??0,repairSpending=ledger?.repairSpending??0;
+  const finalEarnings=money(mayorPayment+ownerRewardTotal+thankYouTotal+unspentBounty);
   const reasons=[`${percentage(preservation)}% of assessed property value preserved`,`${civilianLosses} civilian losses`,
     `${promisesKept} promises kept; ${promisesBroken} broken`,success?'Mandatory keep protected':'Mandatory objective failed',
     workshop?'Workshop objective completed':'Workshop objective lost'];
@@ -162,7 +166,9 @@ export function calculateContractResults(state) {
     promisesKept,promisesBroken,reputation:-promisesBroken,ownerRewards,ownerRewardTotal,thankYouPayments,thankYouTotal,
     baseFee:success?contract.baseFee:0,contractBaseFee:contract.baseFee,propertyDeduction,casualtyDeduction,
     deduction,deductionCapApplied:propertyDeduction+casualtyDeduction>contract.baseFee,bonuses,mayorPayment,
-    bountyGold,bountyCounts:{...state.stats.bountyCounts},finalEarnings,rating,reasons,failedObjectives,specialObjectives,specialPenalty,
+    bountyGold,bountyEarned,bountySpent,unspentBounty,constructionSpending,repairSpending,
+    clientEmergencySpent:ledger?.clientEmergencySpent??0,constructionFunds:ledger?.constructionFunds??state.gold,
+    bountyCounts:{...state.stats.bountyCounts},finalEarnings,rating,reasons,failedObjectives,specialObjectives,specialPenalty,
     keepStatuses:state.structures.filter(s=>s.type==='keep').map(s=>({id:s.id,label:s.label,hp:s.hp,maxHp:s.maxHp,survived:surviving(s)})),
     enemiesDefeated:state.stats.enemiesDefeated,ownerAdvances:contract.ownerAdvances,
     ownerAdvanceAdjustment:money(ownerRewardTotal-contract.ownerAdvances),paid:false};

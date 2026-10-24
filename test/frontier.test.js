@@ -119,7 +119,7 @@ test('Frontier result processing and bounty credit are idempotent, retry restore
     damageEnemy(game.state,enemy,enemy.hp);
     damageEnemy(game.state,enemy,1000);
     assert.equal(game.state.stats.bountyGold,CONFIG.bounties.foot);
-    assert.equal(game.state.gold,budget,'bounties are earnings and do not refill construction budget');
+    assert.equal(game.state.gold,budget+CONFIG.bounties.foot,'bounties immediately enter the battle treasury');
     game.state.schedule=[];game.state.spawnIndex=0;game.state.enemies=[];
     game.api.tick();
     assert.equal(game.state.phase,'victory','HARNESS_PRECONDITION_FAILED: repeatable result');

@@ -4,6 +4,7 @@ import { nextStep } from './pathing.js';
 import { queueExplosion } from './explosions.js';
 import { stageFor, siegeFor } from '../data/stages.js';
 import { engageFrontierNpc } from './frontier/npcs.js';
+import { awardFrontierBounty } from './frontier/economy.js';
 
 export const isAlive = enemy => enemy.hp > 0;
 
@@ -27,7 +28,9 @@ export function damageEnemy(state,enemy,amount) {
   if(enemy.hp===0) {
     enemy.dead=true; enemy.attackPhase='dead';
     const bounty=CONFIG.bounties[enemy.type];
-    if(!stageFor(state).flags.contractPayment) state.gold+=bounty;
+    if(state.stageId==='frontier') {
+      if(!awardFrontierBounty(state,enemy)) return true;
+    } else if(!stageFor(state).flags.contractPayment) state.gold+=bounty;
     if(state.stats) {
       state.stats.enemiesDefeated++;
       state.stats.bountyGold=(state.stats.bountyGold??0)+bounty;
@@ -82,7 +85,7 @@ function slam(state,enemy,target) {
   const spec=CONFIG.enemies.boss;
   const x=Math.max(target.x,Math.min(enemy.x,target.x+target.w));
   const y=Math.max(target.y,Math.min(enemy.y,target.y+target.h));
-  for(const s of [...state.structures]) if(s.hp>0 && !s.destroyed && distanceToStructure({x,y},s)<=spec.slamRadius) damageStructure(state,s,spec.slamDamage);
+  for(const s of [...state.structures]) if(s.hp>0 && !s.destroyed && distanceToStructure({x,y},s)<=spec.slamRadius) damageStructure(state,s,spec.slamDamage,'enemy');
   for(const other of state.enemies) if(other.id!==enemy.id && other.hp>0 && Math.hypot(other.x-x,other.y-y)<=spec.slamRadius) damageEnemy(state,other,spec.slamDamage);
   if(state.stageId==='frontier') for(const unit of [...state.guards,...state.militia,...state.inhabitants]) {
     if(unit.hp<=0||unit.sheltered||Math.hypot(unit.x-x,unit.y-y)>spec.slamRadius) continue;
@@ -118,7 +121,7 @@ function attackStructure(state,enemy,target,dt) {
     return;
   }
   enemy.attackPhase='attacking';
-  damageStructure(state,target,spec.structDps*dt);
+  damageStructure(state,target,spec.structDps*dt,'enemy');
   if(enemy.type==='chiseler') {
     enemy.chipClock-=dt;
     if(enemy.chipClock<=0) {
@@ -173,7 +176,7 @@ export function stepEnemies(state,dt) {
     if(stage.targeting && (pillage?.id??null)!==enemy.pillageTargetId) enemy.walkTarget=null;
     enemy.pillageTargetId=pillage?.id??null;
     if(enemy.walkTarget && Math.hypot(enemy.x-enemy.walkTarget.x-.5,enemy.y-enemy.walkTarget.y-.5)<1e-8) enemy.walkTarget=null;
-    const step=enemy.walkTarget || nextStep(state,enemy.x,enemy.y,stage.targeting?pillage:null);
+    const step=enemy.walkTarget || nextStep(state,enemy.x,enemy.y,stage.targeting?pillage:null,enemy.type);
     enemy.walkTarget=step;
     const obstacle=step && structureAt(state,step.x,step.y);
     const target=stage.targeting ? (blocksStructure(obstacle)&&obstacle)||(pillage&&distanceToStructure(enemy,pillage)<=CONFIG.combat.attackRange?pillage:null) : pillage || (blocksStructure(obstacle) && obstacle);
