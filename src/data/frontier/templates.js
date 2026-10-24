@@ -17,9 +17,10 @@ export const FRONTIER_ARCHETYPES={
   ]},
 };
 export const TERRAIN_TEMPLATES=[
-  {id:'river-fords',river:[37,37,36,35,35,36,37],crossings:[{y:9,h:5},{y:17,h:4},{y:25,h:4}],rocks:[[6,6,4,3],[8,27,3,4],[59,30,3,3]],ridges:[]},
-  {id:'river-bridges',river:[35,36,37,37,36,35,35],crossings:[{y:8,h:4},{y:17,h:4},{y:26,h:4}],rocks:[[5,15,5,3],[59,4,3,4]],ridges:[[8,3,2,8],[8,24,2,8]]},
-  {id:'ridge-crossing',river:[36,35,35,36,37,37,36],crossings:[{y:9,h:4},{y:17,h:4},{y:25,h:5}],rocks:[[4,5,5,4],[59,29,3,4]],ridges:[[9,11,2,5],[7,22,3,6]]},
+  {id:'river-fords',kind:'river',bend:false},
+  {id:'river-bend',kind:'river',bend:true},
+  {id:'ridge-passes',kind:'ridge'},
+  {id:'open-outcrops',kind:'plain'},
 ];
 export const OWNER_NAMES=['Elin Farrow','Oren Bell','Mira Ash','Sela Brook','Ada Forge','Ivo Stone','Nell Rye','Tessa Reed','Perrin Moss','Anja Dale'];
 export const REQUEST_TEMPLATES=[

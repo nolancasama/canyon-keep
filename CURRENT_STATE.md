@@ -238,8 +238,12 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
-Final slice-3 `npm test`: **169 passed, 0 failed** (110 unchanged Canyon tests,
-59 Frontier tests). The 22 new tests cover numerical skills and Canyon
+After the generator-variety correction `npm test`: **170 passed, 0 failed**
+(110 unchanged Canyon tests, 60 Frontier tests). The variety test (30 seeds per
+archetype: ≥3 terrain patterns, ≥8 keep positions, ≥6 budgets, varied districts,
+rivers one four-connected edge-to-edge channel with 1–3 crossings and no porous
+gaps) was confirmed to fail against the slice-3 generator before passing.
+Generated budgets now span roughly 780–950 G. Slice-3 notes follow. The 22 slice-3 tests cover numerical skills and Canyon
 exclusion, career awards/spending/reset/storage failures/retry idempotence,
 generator reproducibility and string/numeric seed replay, 30 seeds for each
 archetype, clustering/overlaps/spawns/roads/evacuation/objectives, deterministic
@@ -257,6 +261,10 @@ Final deterministic balance measurements (starter skills, except Communication
 | Compact Town / seed 2 | 720 G | 720 G | 3440 G | Victory | 82.6% | 2000 |
 | Twin Settlements / seed 3 | 720 G | 720 G | 3440 G | Victory | 73.3% | 2000 / 1220 |
 | Town + Outpost / seed 1 | 720 G | 720 G | 3680 G | Victory | 73.8% | 2000 |
+
+Table measured before the variety correction (generated budgets were then
+clamped at 720 G); the same per-archetype balance tests still pass with the new
+budget formula.
 
 Generated fixtures choose the first seed with an optional special objective
 from initial briefing data, then use public previews/placements to concentrate
@@ -368,7 +376,7 @@ UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 ## Known Issues / Next Steps
 - No known failing headless checks remain for slice 3. Controller behavioral
   acceptance, human playtesting and final visual review remain incomplete.
-- The generator intentionally uses three authored geographic patterns, not
+- The generator intentionally uses four authored geographic patterns, not
   unrestricted terrain synthesis. Maps author no pendulum sites. Careers
   persist only skill levels, development points and completed-contract count;
   earnings and reputation stay contract-local. A storage-denied browser loses
@@ -376,7 +384,9 @@ UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 - Frontier workshop payment is an immediate conditional advance in owner
   earnings, reconciled at results; a broken promise pays zero in the final
   ledger. No owner payment or bounty can fund construction.
-- Frontier visual layout and final aesthetic judgment remain for the
+- Controller screenshot review at 1366×768 (title, briefing, request dialog,
+  prep, battle with emergency site, results, all three archetypes) is done;
+  remaining visual judgment is for human playtest. Original note: Frontier visual layout and final aesthetic judgment remain for the
   controller/Claude. No screenshots or browser acceptance were produced here.
 - Not yet play-tested by a human; balance comes from headless reference runs.
   Frontier playtest questions: are skill effects and slow point awards clear?

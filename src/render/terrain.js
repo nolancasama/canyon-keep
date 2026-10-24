@@ -154,6 +154,9 @@ export function createFrontierTerrain(map){
       if(river){c.fillStyle='#3d7278';c.fillRect(px,py,TILE,TILE);lineWater(c,px,py,x,y);}
       else{c.fillStyle='#4e5b4c';c.fillRect(px,py,TILE,TILE);c.fillStyle='#909783';c.beginPath();c.moveTo(px+2,py+13);c.lineTo(px+6,py+3);c.lineTo(px+15,py+2);c.lineTo(px+19,py+12);c.lineTo(px+13,py+18);c.closePath();c.fill();c.strokeStyle='#c1c0a4';c.stroke();}
     }
+    const crossing=t!=='#'&&(map.features||[]).find(f=>(f.kind==='ford'||f.kind==='bridge')&&x>=f.x&&x<f.x+f.w&&y>=f.y&&y<f.y+f.h);
+    if(crossing?.kind==='ford'){c.fillStyle='#5f8f8c';c.fillRect(px,py,TILE,TILE);c.fillStyle='#b9b596';for(let n=0;n<4;n++){c.beginPath();c.ellipse(px+3+(n%2)*9+noise(x,y,n)*4,py+4+(n>>1)*9+noise(x,y,n+3)*3,3.2,2.4,0,0,Math.PI*2);c.fill();}}
+    else if(crossing){c.fillStyle='#3d7278';c.fillRect(px,py,TILE,TILE);c.fillStyle='#8a6440';c.fillRect(px,py+2,TILE,TILE-4);c.strokeStyle='#5a3e26';c.lineWidth=1;for(let n=4;n<TILE;n+=5){c.beginPath();c.moveTo(px+n,py+2);c.lineTo(px+n,py+TILE-2);c.stroke();}c.fillStyle='#4a3220';c.fillRect(px,py+1,TILE,2);c.fillRect(px,py+TILE-3,TILE,2);}
     if(t==='S'){c.fillStyle='#b5563d';c.beginPath();c.moveTo(px+16,py+4);c.lineTo(px+5,py+10);c.lineTo(px+16,py+16);c.closePath();c.fill();}
   }
   for(const r of map.roads||[]){c.fillStyle='#c4af7f';c.fillRect(r.x*TILE,r.y*TILE,TILE,TILE);c.fillStyle='#e0cb9730';c.fillRect(r.x*TILE+3,r.y*TILE+8,12,3);}

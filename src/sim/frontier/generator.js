@@ -52,18 +52,32 @@ function makeCandidate(seed,archetype,attempt) {
   const cells=Array.from({length:HEIGHT},()=>Array(WIDTH).fill('.')),features=[];
   for(let x=0;x<WIDTH;x++) {cells[0][x]='#';cells[HEIGHT-1][x]='#';}
   for(let y=0;y<HEIGHT;y++) {cells[y][0]='#';cells[y][WIDTH-1]='#';}
-  for(let y=1;y<HEIGHT-1;y++) {
-    const x=terrain.river[Math.floor((y-1)*terrain.river.length/(HEIGHT-2))];
-    const crossing=terrain.crossings.some(c=>y>=c.y&&y<c.y+c.h);
-    features.push({kind:crossing?'ford':'river',x,y,w:2,h:1});
-    if(!crossing) {cells[y][x]='#';cells[y][x+1]='#';}
-  }
-  for(const [kind,rects] of [['rock',terrain.rocks],['ridge',terrain.ridges]]) for(const [x,y,w,h] of rects) {
+  function feature(kind,x,y,w,h,blocked=true) {
     features.push({kind,x,y,w,h});
-    for(let py=y;py<y+h;py++) for(let px=x;px<x+w;px++) cells[py][px]='#';
+    for(let py=y;py<y+h;py++) for(let px=x;px<x+w;px++) cells[py][px]=blocked?'#':'.';
   }
-  const districts=template.districts.map(d=>({...d,types:undefined})),structures=[];
-  for(const d of districts.filter(d=>d.keep)) for(let y=d.y;y<d.y+d.h;y++) for(let x=d.x;x<d.x+d.w;x++) if(cells[y][x]==='.') cells[y][x]='C';
+  if(terrain.kind==='river') {
+    const count=integer(1,3),crossings=Array.from({length:count},(_,i)=>({y:Math.round((i+1)*(HEIGHT-4)/(count+1))+integer(-1,1),kind:pick(['bridge','ford'])}));
+    let x=integer(34,37);
+    for(let y=0;y<HEIGHT;y++) {
+      // Adjacent strips always overlap: the channel stays four-connected,
+      // including beneath the deliberately walkable crossing surfaces.
+      const target=terrain.bend?(y<HEIGHT/2?34:37):36;
+      x=Math.max(34,Math.min(37,x+(random(rng)<.55?Math.sign(target-x):integer(-1,1))));
+      const w=integer(2,3);feature('river',x,y,w,1);
+      const crossing=crossings.find(c=>y===c.y||y===c.y+1);
+      if(crossing) feature(crossing.kind,x,y,w,1,false);
+    }
+  } else if(terrain.kind==='ridge') {
+    const x=integer(34,37),passes=[integer(8,12),integer(23,27)];
+    for(let y=0;y<HEIGHT;y++) if(!passes.some(p=>y>=p&&y<p+3)) feature('ridge',x,y,2,1);
+  }
+  for(let i=0;i<(terrain.kind==='plain'?7:3);i++) {
+    const x=i%2?integer(60,61):integer(3,8),y=integer(3,29);
+    feature('rock',x,y,integer(2,3),integer(2,4));
+  }
+  const districts=template.districts.map(d=>({...d,types:undefined,x:d.x+integer(-3,0),
+    y:Math.max(2,Math.min(HEIGHT-d.h-2,d.y+integer(-2,2))),w:d.w+integer(-2,0),h:d.h+integer(-1,0)})),structures=[];
   function property(type,district,x,y,id,label) {
     const def=CONFIG.structures[type],value=CONFIG.frontier.property[type],name=pick(OWNER_NAMES);
     return {id,type,label,x,y,w:def.w,h:def.h,district:district.id,owner:{name,role:type==='keep'?'Town council':type==='farm'?'Farmer':'Property owner'},
@@ -91,6 +105,18 @@ function makeCandidate(seed,archetype,attempt) {
       const id=type==='workshop'?'workshop':`${district.id}-${type}-${i}`;
       structures.push(property(type,district,point.x,point.y,id,`${district.name} ${type==='farm'?'fields':type} ${i+1}`));
     }
+  }
+  // Region artwork and castle-zone floor follow padded building clusters.
+  // Preserve a usable apron for towers around each keep without tinting an
+  // identical rectangular town envelope on every commission.
+  for(const d of districts) {
+    d.regions=structures.filter(s=>s.district===d.id).map(s=>{
+      const pad=s.type==='keep'?4:2,x=Math.max(1,s.x-pad),y=Math.max(1,s.y-pad);
+      return {x,y,w:Math.min(WIDTH-1,s.x+s.w+pad)-x,h:Math.min(HEIGHT-1,s.y+s.h+pad)-y};
+    });
+    d.x=Math.min(...d.regions.map(r=>r.x));d.y=Math.min(...d.regions.map(r=>r.y));
+    d.w=Math.max(...d.regions.map(r=>r.x+r.w))-d.x;d.h=Math.max(...d.regions.map(r=>r.y+r.h))-d.y;
+    if(d.keep) for(const r of d.regions) for(let y=r.y;y<r.y+r.h;y++) for(let x=r.x;x<r.x+r.w;x++) if(cells[y][x]==='.') cells[y][x]='C';
   }
   const entryMode=integer(0,2),spawns=entryMode===0?[{x:63,y:8},{x:63,y:18},{x:63,y:28}]:
     entryMode===1?[{x:52,y:0},{x:63,y:18},{x:52,y:35}]:[{x:63,y:integer(5,11)},{x:63,y:integer(16,21)},{x:63,y:integer(26,31)}];
@@ -124,7 +150,7 @@ function makeCandidate(seed,archetype,attempt) {
   } else {
     const d=districts.find(d=>d.id==='farms');
     objective={id:'farming-district',kind:'districtIntact',district:'farms',fraction:rules.farmIntactFraction,
-      label:`Keep at least ${rules.farmIntactFraction*100}% of farming properties standing`,location:{x:d.x,y:d.y}};
+      label:`Keep at least ${rules.farmIntactFraction*100}% of farming properties standing`,location:{x:structures.find(s=>s.district===d.id).x,y:structures.find(s=>s.district===d.id).y}};
   }
   objective.mandatory=random(rng)<.25;objective.reward=rules.specialReward;objective.penalty=rules.specialPenalty;
   const groups=copy(CONFIG.frontier.siege.groups);
@@ -136,7 +162,7 @@ function makeCandidate(seed,archetype,attempt) {
     `${count('boss')} giant brute follows the raiders toward the keeps.`,
     `The ${districts.map(d=>d.name).join(', ')} share one construction budget; exposed properties need difficult choices.`,
   ]};
-  const assessed=structures.reduce((n,s)=>n+Math.round(s.value*s.hp/s.maxHp),0),budget=Math.round(Math.max(rules.budgetMin,Math.min(rules.budgetMax,assessed*rules.budgetRate)));
+  const assessed=structures.reduce((n,s)=>n+Math.round(s.value*s.hp/s.maxHp),0),budget=Math.round(Math.max(rules.budgetMin,Math.min(rules.budgetMax,rules.budgetBase+assessed*rules.budgetRate+footCount*rules.budgetPerRaider)));
   return {seed,archetype,generated:true,map:{id:`frontier-${seed}-${archetype}`,map:cells.map(row=>row.join('')),keep:{x:structures[0].x,y:structures[0].y},spawns,sites:[],roads,districts,features,terrainPattern:terrain.id},
     structures,requests,specialObjectives:[objective],siege,budget,guardCount:pick(rules.guardCounts)};
 }

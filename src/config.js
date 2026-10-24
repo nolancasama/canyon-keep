@@ -79,7 +79,7 @@ export const CONFIG = {
       structuralHpPerLevel: 0.05, mechanicalCooldownPerLevel: 0.08, minBuildTime: 0.8,
       completionPoints: 1, exceptionalPoints: 2 },
     generator: { maxAttempts: 8, objectiveSpawnDistance: 7, minDefensiveTiles: 12,
-      minDistrictValue: 300, budgetRate: 0.14, budgetMin: 720, budgetMax: 1040,
+      minDistrictValue: 300, budgetRate: 0.13, budgetMin: 600, budgetMax: 950, budgetBase: 70, budgetPerRaider: 9,
       guardCounts: [3,4,5], farmIntactFraction: 0.8, specialReward: 80, specialPenalty: 60,
       footCount: [3,5], extraWaveCount: [0,2], placementAttempts: 160 },
     caltrops: { uses: 10, damage: 4, slowFactor: 0.5, slowDuration: 2 },

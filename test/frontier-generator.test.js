@@ -100,3 +100,42 @@ test('generated special objectives itemize building and eighty-percent farming o
   const warehouse=state.structures.find(s=>s.type==='warehouse'),buildingGoal={id:warehouse.id,kind:'building'};
   assert.equal(objectiveMet(state,buildingGoal),true);damageStructure(state,warehouse,10000);assert.equal(objectiveMet(state,buildingGoal),false);
 });
+
+function components(tiles) {
+  const left=new Set(tiles),groups=[];
+  for(const start of tiles) {
+    if(!left.has(start)) continue;
+    const queue=[start];left.delete(start);
+    for(let i=0;i<queue.length;i++) {
+      const [x,y]=queue[i].split(',').map(Number);
+      for(const next of [`${x+1},${y}`,`${x-1},${y}`,`${x},${y+1}`,`${x},${y-1}`]) if(left.has(next)) {left.delete(next);queue.push(next);}
+    }
+    groups.push(queue);
+  }
+  return groups;
+}
+
+test('generated contracts vary terrain, towns and budgets, and rivers are continuous with one to three crossings',()=>{
+  for(const archetype of Object.keys(FRONTIER_ARCHETYPES)) {
+    const patterns=new Set(),keeps=new Set(),budgets=new Set(),boxes=new Set();
+    for(let seed=0;seed<30;seed++) {
+      const contract=generateFrontierContract(seed,archetype),map=contract.map;
+      patterns.add(map.terrainPattern);keeps.add(`${map.keep.x},${map.keep.y}`);budgets.add(contract.budget);
+      boxes.add(map.districts.map(d=>[d.x,d.y,d.w,d.h].join(':')).join('|'));
+      const tiles=kind=>map.features.filter(f=>f.kind===kind).flatMap(f=>Array.from({length:f.w*f.h},(_,i)=>`${f.x+i%f.w},${f.y+Math.floor(i/f.w)}`));
+      const river=tiles('river');
+      if(!river.length) continue;
+      const crossing=new Set([...tiles('ford'),...tiles('bridge')]),water=[...new Set([...river,...crossing])];
+      assert.equal(components(water).length,1,`${archetype} seed ${seed} river channel is one four-connected body`);
+      const rows=new Set(water.map(t=>+t.split(',')[1]));
+      for(let y=0;y<map.map.length;y++) assert.ok(rows.has(y),`${archetype} seed ${seed} river spans row ${y}`);
+      for(const t of river) if(!crossing.has(t)) {const [x,y]=t.split(',').map(Number);assert.equal(map.map[y][x],'#',`${archetype} seed ${seed} river ${t} has no porous gap`);}
+      const count=components([...crossing]).length;
+      assert.ok(count>=1&&count<=3,`${archetype} seed ${seed} has ${count} river crossings`);
+    }
+    assert.ok(patterns.size>=3,`${archetype} uses ${patterns.size} terrain patterns`);
+    assert.ok(keeps.size>=8,`${archetype} has ${keeps.size} keep positions`);
+    assert.ok(budgets.size>=6,`${archetype} has ${budgets.size} budgets`);
+    assert.ok(boxes.size>1,`${archetype} district boxes vary`);
+  }
+});

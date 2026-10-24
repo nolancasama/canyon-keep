@@ -707,3 +707,17 @@ Deferred / rejected for this pass
   facing a 69-HP brute. Fixtures now isolate the guard mechanism and weight
   southern tower coverage. Product balance was not changed to fit the tests.
   No controller acceptance, browser suite or visual evidence was produced.
+
+## 2026-10-24 — Generated contracts: real variety (controller review)
+
+Review of slice-3 seeds found the "river" was a porous column of water blocks,
+the town district was the same rectangle on every seed, and budgets were
+clamped to the minimum. Changed: four terrain patterns (river-fords,
+river-bend, ridge-passes, open-outcrops); rivers are a continuous seeded walk,
+2–3 tiles wide, with 1–3 two-row bridge/ford crossings rendered as planks or
+stepping stones (the handcrafted ford now renders the same way; its data is
+unchanged); district position/size jitter per seed with overlays drawn from the
+actual clusters; budget = base + assessed×rate + raiders×perRaider, clamped
+600–950. In-game skills collapse to one hover line so the five-category palette
+still fits 1366×768; the full skills panel stays on the title screen.
+Rejected: arbitrary noise terrain (the brief asks for authored patterns first).
