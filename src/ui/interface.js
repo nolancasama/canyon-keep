@@ -14,8 +14,13 @@ tools.splice(3,0,['palisade','Palisade',palisadeIcon,'', 'Fortifications'],['cal
 const emergencyTools=['barricade','palisade','caltrops'];
 const canBuild=state=>state.phase==='prep'||frontier(state)&&state.phase==='siege';
 const lineTool=type=>!!CONFIG.structures[type]?.line;
-const wallTool=type=>CONFIG.structures[type]?.family==='wall';
 const names=Object.fromEntries(tools.map(t=>[t[0],t[1]]));
+const replacementStatus=(tool,cells)=>{
+  const p=cells.length===1&&cells[0];
+  if(!p?.replacement)return '';
+  const label=p.cost<0?`Refund: ${-p.cost} G`:`Cost: ${p.cost} G`;
+  return `Replace ${names[p.replacedType]||p.replacedType} -> ${tool==='tower'?'Tower':names[tool]} | ${label}${p.reason?' — '+p.reason:''}`;
+};
 const descriptions={wall:'Solid stone barrier; supports canyon towers.',gate:'Keeps the trade road open; blocks enemies.',barricade:'A cheap obstacle to slow the assault.',tower:'Arrows strike enemies within range.',spiked:'Spikes damage every melee attacker.',golem:'At half HP, opens to release a temporary stone defender.',sensor:'Walkable detector. Link up to three devices; detects enemies only.',launcher:'Trigger fires three piercing bolts. R rotates before placement.',retractable:'Starts lowered. A linked trigger raises it temporarily when clear.',link:'Select a sensor, then click devices to toggle links. Empty ground clears selection.',pendulum:'Cliff-mounted hammer; its sweep also damages your works.',demolish:'Remove military works for their HP-scaled refund.',repair:'Restore damaged military works for gold.'};
 const escapeText=value=>String(value).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
 // Compare with the last string written, not el.innerHTML: the browser re-serializes
@@ -152,8 +157,9 @@ export class Interface {
     else if(prep)status='Build across the canyon. Leave a gate for the trade road.';
     else if(battle)status=p?'Space releases the Titan. Its hammer also damages friendly structures.':'Watch the breach: enemies choose the least costly route through your defenses.';
     else status='Inspect the battlefield, or retry with the exact pre-siege castle and treasury.';
-    if(prep&&this.hover&&wallTool(this.tool)&&this.previewCells.length===1&&this.previewCells[0].replacement){const p=this.previewCells[0],label=p.cost<0?`Refund: ${-p.cost} G`:`Cost: ${p.cost} G`;status=`Replace ${names[p.replacedType]||p.replacedType} -> ${names[this.tool]} | ${label}`;invalid=!p.valid;}
-    this.el.status.textContent=status;this.el.status.classList.toggle('invalid',invalid);this.el.status.classList.toggle('affordable',prep&&wallTool(this.tool)&&!!this.previewCells[0]?.replacement&&!invalid);
+    const replacement=prep&&this.hover&&replacementStatus(this.tool,this.previewCells);
+    if(replacement){status=replacement;invalid=!this.previewCells[0].valid;}
+    this.el.status.textContent=status;this.el.status.classList.toggle('invalid',invalid);this.el.status.classList.toggle('affordable',!!replacement&&!invalid);
     const result=!prep&&!battle;
     this.el.results.hidden=(!result||this.inspected)&&!state.growthReport&&!state.scoutReport;
     if(prep&&state.scoutReport&&!state.growthReport){const report=state.scoutReport;html(this.el.results,`<div class="result-card scout-card" role="dialog" aria-modal="true" aria-labelledby="scout-headline"><h2 id="scout-headline">SIEGE ${report.siegeIndex} — SCOUT REPORT</h2><ul>${report.bullets.map(b=>`<li>${escapeText(b)}</li>`).join('')}</ul><button class="primary" data-action="dismissScout">BEGIN BUILDING</button></div>`);}
@@ -206,6 +212,10 @@ export class Interface {
     if(prep){const requirements=api.readiness(),ready=requirements.every(r=>r.ok),repair=api.repairCost();stats='<div><div class="prep-title">A town entrusted to you</div><div class="prep-sub">Click marked owners to negotiate. Protect the keep; decide which districts you can afford to save.</div></div>';actions+=`<button class="quiet" data-action="guards" ${modal?'disabled':''}>Request guards</button><button class="quiet" data-action="scoutReport">Scout report</button><button class="quiet" data-action="repairAll" ${!repair||repair>state.gold||modal?'disabled':''}>Repair · ${money(repair)}</button><div class="siege-start"><button class="primary" data-action="start" ${!ready||modal?'disabled':''}>START SIEGE →</button><div class="requirements ${ready?'ready':'short'}">${requirements.map(r=>escapeText(r.message)).join('<br>')}${api.mechanismWarnings().map(w=>`<div class="mechanism-warning">${escapeText(w.message??w)}</div>`).join('')}</div></div>`;}
     else{stats=`<div class="keep-meters">${keeps.map(keep=>this.meter(escapeText(keep.label||'MANDATORY KEEP'),`${Math.ceil(Math.max(0,keep.hp))} / ${keep.maxHp}`,keep.hp/keep.maxHp)).join('')}</div>`;const assessment=contract.assessment,total=assessment.reduce((n,a)=>n+a.assessed,0),preserved=assessment.reduce((n,a)=>{const s=state.structures.find(s=>s.id===a.id);return n+a.assessed*(s&&!s.destroyed?Math.min(a.hpStart,Math.max(0,s.hp))/a.hpStart:0);},0),promises=state.structures.filter(s=>s.promise?.status==='accepted');stats+=`<div class="frontier-live"><span>Settlement preserved <strong>${(total?preserved/total*100:100).toFixed(1)}%</strong></span><span>Living civilians <strong>${state.inhabitants.filter(i=>i.hp>0).length} / ${state.population}</strong></span><span>Emergency supplies: <strong>${money(state.emergency?.spent)} of ${money(state.emergency?.cap??CONFIG.frontier.emergencyCap)}</strong></span><span class="live-promises">${promises.length?promises.map(s=>`${escapeText(s.label)}: <strong class="${s.destroyed||s.hp<=0?'short':''}">${s.destroyed||s.hp<=0?'BROKEN':'standing'}</strong>`).join(' · '):'No active promises'}</span></div>`;if(boss)stats+=this.meter('THE BRUTE',`${Math.ceil(boss.hp)} HP`,boss.hp/boss.maxHp,'boss');if(battle)actions+=`<button class="speed" data-action="pause">${state.speed?'Ⅱ':'▶'}</button>${[1,2,4].map(n=>`<button data-action="speed" data-speed="${n}" class="speed ${state.speed===n?'active':''}">${n}×</button>`).join('')}`;else actions+='<button data-action="results">Show results</button><button class="quiet" data-action="title">Back to title</button>';}
     html(this.el.actions,actions);html(this.el['battle-stats'],stats);this.el.status.textContent=performance.now()<this.messageUntil?this.message:prep?this.previewInfo?.reason||'Click a property to inspect its owner and request. Military works only; leave the trade road open.':battle?this.previewInfo?.reason||'Class B: emergency construction takes time. Guards defend their posts; civilians seek shelter. P pauses; F changes speed.':'Damage tint shows the cost to each property. Retry restores your exact preparation.';
+    const replacement=prep&&this.hover&&replacementStatus(this.tool,this.previewCells);
+    if(replacement)this.el.status.textContent=replacement;
+    this.el.status.classList.toggle('invalid',!!replacement&&!this.previewCells[0].valid);
+    this.el.status.classList.toggle('affordable',!!replacement&&this.previewCells[0].valid);
     this.el.results.hidden=!modal&&(!result||this.inspected);
     if(state.briefing)this.frontierBriefing(state.briefing);
     else if(state.journalOpen)this.frontierJournal();

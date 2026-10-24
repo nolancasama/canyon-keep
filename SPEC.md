@@ -153,6 +153,14 @@ Rules:
   must be affordable. Failure leaves the state unchanged. The replacement records
   its full purchase price, preserves adjacent tower support, and updates occupancy,
   flow field and wall connections. Other occupied tiles remain invalid.
+- In preparation in either stage, the Tower tool also replaces a living,
+  player-owned ordinary wall atomically. Gates, special walls, towers and
+  non-player structures cannot be replaced by towers. Affordability uses the
+  full tower price minus the wall's HP-scaled refund (100 G for an intact wall,
+  110 G at half health); the tower records its full purchase price for refunds.
+  Outside `C`, the new tower needs an orthogonal supporting neighbour, and
+  replacing the wall must not leave another tower unsupported. Towers remain
+  single-placement tools and cannot be built during Frontier battle.
 - Left-click places; drag with Wall, Gate, Spiked Wall, Golem Wall or Barricade places a 4-connected line
   (L-shaped: horizontal then vertical leg); family lines replace crossed family
   pieces and skip matching existing structures at no charge.

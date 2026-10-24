@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../src/config.js';
 import { MAP, KEEP, SITES } from '../src/data/map.js';
-import { damageStructure, structureAt, tileAt } from '../src/sim/grid.js';
+import { blockingAt, damageStructure, structureAt, tileAt } from '../src/sim/grid.js';
+import { spawnEnemy, stepEnemies } from '../src/sim/enemies.js';
 import { capacity, repairCost } from '../src/sim/build.js';
 import { nextStep, rebuildFlow } from '../src/sim/pathing.js';
 import { settlementOutside } from '../src/sim/settlement.js';
@@ -184,6 +185,134 @@ test('gate replacement charges only the net cost and is atomic when unaffordable
   assert.equal(game.api.preview('gate', 52, 10).valid, false);
   assert.equal(game.api.place('gate', 52, 10).ok, false);
   assert.equal(JSON.stringify(game.state), before);
+});
+
+test('ordinary wall-to-tower replacement charges the health-adjusted net cost exactly once', () => {
+  for (const [fraction, refund, cost] of [[1, 20, 100], [0.5, 10, 110]]) {
+    const game = createGame();
+    assert.equal(game.api.place('wall', 52, 10).ok, true);
+    const old = structureAt(game.state, 52, 10);
+    old.hp *= fraction;
+    const index = game.state.structures.indexOf(old), count = game.state.structures.length;
+    game.state.gold = cost;
+    const preview = game.api.preview('tower', 52, 10);
+    assert.equal(preview.valid, true);
+    assert.equal(preview.replacement, true);
+    assert.equal(preview.replacedId, old.id);
+    assert.equal(preview.replacedType, 'wall');
+    assert.equal(preview.refund, refund);
+    assert.equal(preview.cost, cost);
+    assert.equal(game.api.place('tower', 52, 10).ok, true);
+    const tower = structureAt(game.state, 52, 10);
+    assert.equal(tower.type, 'tower');
+    assert.equal(tower.paidCost, 120);
+    assert.equal(tower.hp, tower.maxHp);
+    assert.equal(game.state.gold, 0);
+    assert.equal(game.state.structures.length, count);
+    assert.equal(game.state.structures[index], tower, 'replacement keeps its structure-list slot');
+    assert.equal(game.state.structures.some(s => s.id === old.id), false);
+    const before = structuredClone(game.state);
+    assert.equal(game.api.place('tower', 52, 10).ok, false);
+    assert.equal(game.api.placeLine('tower', 52, 10, 54, 10).ok, false);
+    assert.deepEqual(game.state, before, 'repeat clicks and drag cannot duplicate or credit the tower');
+    assert.equal(game.api.demolish(52, 10).refund, 120);
+    assert.equal(game.state.gold, 120, 'demolition refunds full tower paid value, without another wall refund');
+  }
+});
+
+test('unaffordable wall-to-tower replacement leaves the wall and all state unchanged', () => {
+  for (const [fraction, gold, cost] of [[1, 99, 100], [0.5, 109, 110]]) {
+    const game = createGame();
+    assert.equal(game.api.place('wall', 52, 10).ok, true);
+    structureAt(game.state, 52, 10).hp *= fraction;
+    game.state.gold = gold;
+    const before = structuredClone(game.state);
+    const preview = game.api.preview('tower', 52, 10);
+    assert.equal(preview.valid, false);
+    assert.equal(preview.cost, cost);
+    assert.match(preview.reason, /gold/i);
+    assert.equal(game.api.place('tower', 52, 10).ok, false);
+    assert.deepEqual(game.state, before);
+  }
+});
+
+test('tower replacements reject special walls, gates, towers and non-player ordinary walls atomically', () => {
+  for (const type of ['gate', 'spiked', 'golem', 'launcher', 'retractable', 'tower', 'house', 'farm', 'barricade']) {
+    const game = createGame(), target = structure(game.state, type, 52, 10);
+    const before = structuredClone(game.state);
+    const preview = game.api.preview('tower', target.x, target.y);
+    assert.equal(preview.valid, false, type);
+    assert.equal(game.api.place('tower', target.x, target.y).ok, false, type);
+    assert.deepEqual(game.state, before, type);
+  }
+  for (const ownership of [{ owner: 'client' }, { npcOwned: true }, { enemy: true }]) {
+    const game = createGame();
+    Object.assign(structure(game.state, 'wall', 52, 10), ownership);
+    const before = structuredClone(game.state);
+    assert.equal(game.api.preview('tower', 52, 10).valid, false);
+    assert.equal(game.api.place('tower', 52, 10).ok, false);
+    assert.deepEqual(game.state, before);
+  }
+});
+
+test('wall-to-tower replacement requires its own support and preserves support for existing canyon towers', () => {
+  const isolated = createGame();
+  assert.equal(isolated.api.place('wall', 8, 5).ok, true);
+  const before = structuredClone(isolated.state);
+  assert.equal(isolated.api.preview('tower', 8, 5).valid, false);
+  assert.match(isolated.api.place('tower', 8, 5).reason, /support|adjoin/i);
+  assert.deepEqual(isolated.state, before);
+  assert.equal(isolated.api.place('wall', 7, 5).ok, true);
+  assert.equal(isolated.api.preview('tower', 8, 5).valid, true);
+  assert.equal(isolated.api.place('tower', 8, 5).ok, true);
+
+  const game = createGame();
+  for (const x of [7, 8]) assert.equal(game.api.place('wall', x, 5).ok, true);
+  assert.equal(game.api.place('tower', 9, 5).ok, true);
+  const supportedBefore = structuredClone(game.state);
+  assert.equal(game.api.preview('tower', 8, 5).valid, false);
+  assert.match(game.api.place('tower', 8, 5).reason, /unsupported|support/i);
+  assert.deepEqual(game.state, supportedBefore, 'a supported replacement cannot strand its neighbouring tower');
+  assert.equal(game.api.place('wall', 10, 5).ok, true);
+  assert.equal(game.api.place('tower', 8, 5).ok, true, 'another support keeps the existing tower valid');
+});
+
+test('replaced towers preserve neighbours, refresh occupancy and flow, and block enemy steps', () => {
+  const game = createGame();
+  for (const [type, x] of [['wall', 51], ['wall', 52], ['gate', 53]]) {
+    assert.equal(game.api.place(type, x, 10).ok, true);
+  }
+  const neighbours = [51, 53].map(x => structuredClone(structureAt(game.state, x, 10)));
+  const oldFlow = rebuildFlow(game.state);
+  assert.equal(game.api.place('tower', 52, 10).ok, true);
+  const tower = structureAt(game.state, 52, 10);
+  assert.equal(blockingAt(game.state, 52, 10), true);
+  assert.deepEqual([51, 53].map(x => structureAt(game.state, x, 10)), neighbours);
+  assert.ok(game.state.flowRevision > oldFlow.revision);
+  nextStep(game.state, 52.5, 9.5);
+  assert.equal(game.state.flow.revision, game.state.flowRevision);
+  assert.notDeepEqual(nextStep(game.state, 52.5, 9.5), { x: 52, y: 10 }, 'flow takes an open detour around the tower');
+  game.state.inhabitants = [];
+  const enemy = spawnEnemy(game.state, 'foot', 52.5, 9.5);
+  enemy.walkTarget = { x: 52, y: 10 };
+  const hp = tower.hp;
+  stepEnemies(game.state, 1 / 60);
+  assert.equal(enemy.attackTargetId, tower.id, 'a cached step into the tower becomes a breach attack');
+  assert.ok(tower.hp < hp);
+  assert.equal(enemy.x, 52.5);
+  assert.equal(enemy.y, 9.5, 'enemy never walks through the occupied tile');
+});
+
+test('repeated wall-to-tower replacement and demolition conserve gold plus held value', () => {
+  const game = createGame(), initial = game.state.gold;
+  for (let cycle = 0; cycle < 8; cycle++) {
+    assert.equal(game.api.place('wall', 52, 10).ok, true);
+    assert.equal(game.state.gold, initial - 20);
+    assert.equal(game.api.place('tower', 52, 10).ok, true);
+    assert.equal(game.state.gold, initial - 120);
+    assert.equal(game.api.demolish(52, 10).refund, 120);
+    assert.equal(game.state.gold, initial);
+  }
 });
 
 test('wall replacement refunds intact gates and charges for damaged gates', () => {

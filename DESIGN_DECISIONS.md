@@ -1,5 +1,19 @@
 # Design Decisions
 
+## 2026-10-24 — Ordinary wall-to-tower replacement
+
+- The Tower tool replaces only living player-owned ordinary walls during
+  preparation in Canyon and Frontier. Reuse atomic wall-family replacement
+  so the defensive line never opens and occupancy/path revisions update together.
+- Affordability uses tower price minus the wall's health-scaled refund; charge
+  that net once and record the tower's full purchase price for later demolition.
+- A replacement outside `C` needs an orthogonal supporting neighbour, excluding
+  the replaced wall. Refuse replacement if removing the wall would leave another
+  existing tower unsupported.
+- Rejected: replacing gates or special walls, and requiring the full tower price
+  up front. Ordinary-wall-only replacement keeps the action predictable; net
+  affordability follows existing preparation exchanges without extra treasury.
+
 ## 2026-10-19 — Slice 1 controller corrections
 
 - Replaced the previous canyon with the controller-authored `.ai/new-map.txt`.

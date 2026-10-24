@@ -19,6 +19,43 @@ function until(game,predicate,limit=240) {
   assert.ok(predicate(),'HARNESS_PRECONDITION_FAILED: expected construction state not reached');
 }
 
+test('Frontier prep replaces ordinary walls with towers at net cost and preserves adjacent support',()=>{
+  for(const gold of [100,99]) {
+    const game=createGame({stage:'frontier'});
+    requireAction(game.api.place('wall',7,18),'tower supporting wall');
+    requireAction(game.api.place('wall',8,18),'wall to upgrade');
+    const support=structuredClone(structureAt(game.state,7,18));
+    game.state.gold=gold;
+    const before=structuredClone(game.state),preview=game.api.preview('tower',8,18);
+    assert.equal(preview.cost,100);
+    assert.equal(preview.valid,gold===100);
+    const result=game.api.place('tower',8,18);
+    assert.equal(result.ok,gold===100);
+    if(gold===99) assert.deepEqual(game.state,before);
+    else {
+      assert.equal(game.state.gold,0);
+      assert.equal(structureAt(game.state,8,18).type,'tower');
+      assert.equal(structureAt(game.state,8,18).paidCost,120);
+      assert.equal(blockingAt(game.state,8,18),true);
+      assert.equal(game.state.structures.length,before.structures.length);
+      assert.deepEqual(structureAt(game.state,7,18),support);
+    }
+  }
+});
+
+test('Frontier active siege prohibits tower replacement of an existing ordinary wall atomically',()=>{
+  const game=createGame({stage:'frontier'});
+  requireAction(game.api.place('wall',7,18),'tower support');
+  requireAction(game.api.place('wall',8,18),'replacement target');
+  requireAction(game.api.startSiege(),'start replacement prohibition fixture');
+  const before=structuredClone(game.state);
+  assert.equal(game.api.preview('tower',8,18).valid,false);
+  assert.equal(game.api.place('tower',8,18).ok,false);
+  assert.equal(game.api.placeEmergency('tower',8,18).ok,false);
+  assert.equal(game.api.placeLine('tower',8,18,9,18).ok,false);
+  assert.deepEqual(game.state,before);
+});
+
 test('Frontier Class B prep works; battle sites cost budget, stay nonblocking, and complete after two seconds',()=>{
   const game=createGame({stage:'frontier'});
   for(const [i,type] of ['barricade','palisade','caltrops'].entries()) requireAction(game.api.place(type,8+i,15),'prep makeshift');

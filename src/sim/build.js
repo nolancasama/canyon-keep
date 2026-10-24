@@ -85,9 +85,14 @@ export function placement(state, type, x, y, { line = false } = {}) {
   if (!Number.isInteger(x) || !Number.isInteger(y)) return failure('Choose a map tile', cost);
   if (state.structures.some(s => clientOwned(s) && x < s.x+s.w && x+def.w > s.x && y < s.y+s.h && y+def.h > s.y)) return failure(clientReason, cost);
   const existing = structureAt(state, x, y);
+  const wallToTower = type === 'tower' && existing?.type === 'wall' &&
+    !existing.owner && !existing.npcOwned && !existing.enemy;
   const interchangeable = existing && existing.type !== type && def.family &&
     def.family === CONFIG.structures[existing.type]?.family;
-  if (interchangeable) {
+  if (interchangeable || wallToTower) {
+    if (wallToTower && tileAt(x, y, state) !== 'C' && !supported(state, { x, y }, existing.id)) {
+      return failure('Canyon towers must adjoin a supporting wall', cost);
+    }
     if (!def.supportsTower && losesTowerSupport(state, existing)) return failure('Would leave a canyon tower unsupported', cost);
     const refund = refundValue(existing), netCost = def.cost - refund;
     return { ...(state.gold < netCost ? failure('Not enough gold', netCost) :
