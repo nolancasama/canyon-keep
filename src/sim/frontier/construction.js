@@ -75,7 +75,8 @@ export function stepFrontierConstruction(state,dt) {
   for(const site of [...state.constructionSites]) {
     site.elapsed=Math.min(site.duration,site.elapsed+dt);
     if(site.elapsed+1e-8<site.duration) continue;
-    const occupants=[...state.enemies,...state.inhabitants,...state.guards,...state.militia,...state.golems];
+    const occupants=[...state.enemies,...state.inhabitants,...state.guards,...state.militia,
+      ...(state.archers??[]).filter(u=>!u.wallNodeId),...(state.cavalry??[]),...state.golems];
     if(occupants.some(p=>p.hp>0&&!p.sheltered&&p.status!=='crumbled'&&contains(site,p.x,p.y))) {site.status='waiting';continue;}
     if(CONFIG.structures[site.type].blocks!==false&&!hasEnemyRoute(state,site,site.id)) {site.status='waiting_route';continue;}
     const def=CONFIG.structures[site.type];

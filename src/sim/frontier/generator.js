@@ -47,6 +47,36 @@ function search(map,starts,pass,goal=null,order=directions) {
   for(let p=found;p;p=previous.get(key(p.x,p.y))) path.push(p);
   return path.reverse();
 }
+// A separate seed stream deliberately leaves terrain, owner requests and the
+// raid schedule unchanged when garrison composition changes.
+export function generateGarrisons(seed,archetype,map,structures,siege) {
+  const rules=CONFIG.frontier.garrison,types=Object.keys(rules.costs);
+  const difficulty=siege.groups.reduce((sum,g)=>sum+g.count*(CONFIG.frontier.fronts.strength[g.type]??1),0);
+  const keeps=structures.filter(s=>s.type==='keep'),posts=keeps.map(keep=>({keep,district:keep.district}));
+  for(const district of map.districts.filter(d=>d.id==='outpost')) posts.push({keep:keeps[0],district:district.id,postId:district.id});
+  return posts.map(post=>{
+    const {keep,postId}=post,rng=createRng(frontierSeed(`${seed}:garrison:${archetype}:${postId??keep.id}`)),roll=()=>random(rng);
+    const district=map.districts.find(d=>d.id===post.district),properties=structures.filter(s=>s.district===post.district&&s.type!=='keep');
+    const size=properties.length,wealth=rules.wealthRange[0]+roll()*(rules.wealthRange[1]-rules.wealthRange[0]);
+    const value=properties.reduce((sum,s)=>sum+s.value,0),fortifications=structures.filter(s=>!s.destroyed&&CONFIG.structures[s.type]?.military&&s.district===post.district).length;
+    const budget=Math.floor(Math.max(rules.minBudget,Math.min(rules.maxBudget,
+      (rules.baseBudget+size*rules.sizeBudget+value*wealth*rules.wealthBudget+fortifications*rules.fortificationBudget+difficulty*rules.difficultyBudget)*(rules.archetypeBudget[archetype]??1))));
+    const weights={...rules.typeWeights,cavalry:rules.typeWeights.cavalry*(wealth<rules.poorThreshold?rules.poorCavalryWeight:1)};
+    let available=types.filter(type=>roll()<rules.subsetChance*(type==='cavalry'&&wealth<rules.poorThreshold?rules.poorCavalryWeight:1));
+    const pick=items=>{
+      let remaining=roll()*items.reduce((sum,type)=>sum+weights[type],0);
+      return items.find(type=>(remaining-=weights[type])<0)??items.at(-1);
+    };
+    if(!available.length) available=[pick(types)];
+    const roster={keepId:keep.id,...(postId?{postId}:{}),name:district?.name??keep.label,footmen:0,archers:0,cavalry:0,budget,strength:0,size,wealth,difficulty,fortifications};
+    for(;;) {
+      const affordable=available.filter(type=>roster.strength+rules.costs[type]<=budget+Number.EPSILON*budget);
+      if(!affordable.length) break;
+      const type=pick(affordable);roster[type]++;roster.strength=Math.round((roster.strength+rules.costs[type])*10)/10;
+    }
+    return roster;
+  });
+}
 function makeCandidate(seed,archetype,attempt) {
   const rules=CONFIG.frontier.generator,rng=createRng((seed+Math.imul(attempt+1,0x9e3779b9))>>>0);
   const integer=(min,max)=>min+Math.floor(random(rng)*(max-min+1)),pick=items=>items[integer(0,items.length-1)];
@@ -233,8 +263,9 @@ function makeCandidate(seed,archetype,attempt) {
     scoutReport:frontScoutReport(plan,groups,districts)};
   const map={id:`frontier-${seed}-${archetype}`,map:cells.map(row=>row.join('')),keep:{x:structures[0].x,y:structures[0].y},spawns,sites:[],roads,districts,features,terrainPattern:terrain.id};
   const budgetPlan=frontierBudgetPlan(map,structures,archetype),budget=budgetPlan.available;
+  const guardCount=pick(rules.guardCounts),garrisons=generateGarrisons(seed,archetype,map,structures,siege);
   return {seed,archetype,generated:true,map,
-    structures,requests,specialObjectives:[objective],siege,budget,budgetPlan,guardCount:pick(rules.guardCounts)};
+    structures,requests,specialObjectives:[objective],siege,budget,budgetPlan,guardCount,garrisons};
 }
 
 export function validateFrontierContract(candidate) {
@@ -298,6 +329,7 @@ export function generateFrontierContract(inputSeed=CONFIG.seed,inputArchetype='r
     rejected.push(validation.errors);
   }
   return {seed,archetype,generated:true,map:copy(FRONTIER_MAP),siege:copy(FRONTIER_SIEGE),structures:frontierSettlement(),
+    garrisons:[{keepId:'keep',name:'Vale Keep',footmen:CONFIG.frontier.guards.count,archers:0,cavalry:0,budget:CONFIG.frontier.guards.count,strength:CONFIG.frontier.guards.count}],
     budgetPlan:frontierBudgetPlan(FRONTIER_MAP,frontierSettlement(),'handcrafted',CONFIG.frontier.budget),
     requests:frontierRequests(frontierSettlement()),specialObjectives:[],budget:CONFIG.frontier.budget,guardCount:CONFIG.frontier.guards.count,
     generation:{attempts:CONFIG.frontier.generator.maxAttempts,fallback:true,rejected}};

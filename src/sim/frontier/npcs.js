@@ -4,6 +4,9 @@ import { isWalkable, structureAt, blocksStructure, emit } from '../grid.js';
 import { hasTradeRoad } from '../build.js';
 import { createInhabitants } from '../inhabitants.js';
 import { damageEnemy } from '../enemies.js';
+import { stepArchers } from './archers.js';
+import { stepCavalry } from './cavalry.js';
+import { initializeInfirmaries, stepInfirmaries } from './infirmary.js';
 
 const directions=[[1,0],[0,1],[-1,0],[0,-1]],key=(x,y)=>`${x},${y}`;
 const alive=unit=>unit.hp>0&&!unit.destroyed;
@@ -30,7 +33,7 @@ function safePost(state,building,slot=0) {
 export function guardPosts(state) {
   if(state.stageId!=='frontier') return [];
   const buildings=state.structures.filter(s=>s.owner&&alive(s));
-  const keep=buildings.find(s=>s.type==='keep'),posts=[{id:'keep',name:keep.label,buildingId:keep.id,district:keep.district}];
+  const posts=buildings.filter(s=>s.type==='keep').map((keep,i)=>({id:i===0?'keep':keep.id,name:keep.label,buildingId:keep.id,district:keep.district}));
   for(const district of stageFor(state).map.districts) {
     const building=buildings.find(s=>s.district===district.id&&s.type!=='keep');
     if(building) posts.push({id:district.id,name:district.name,buildingId:building.id,district:district.id});
@@ -47,13 +50,22 @@ function positionAtPost(state,unit,slot=0) {
   unit.x=point.x+.5;unit.y=point.y+.5;unit.postX=unit.x;unit.postY=unit.y;unit.path=null;unit.status='holding';
 }
 function defender(state,type,id,postId,slot=0) {
-  const rules=CONFIG.frontier[type==='guard'?'guards':'militia'];
-  const unit={id,type,name:type==='guard'?'Professional guard':'District militia',postId,hp:rules.hp,maxHp:rules.hp,
+  const rules=CONFIG.frontier[type==='guard'?'guards':type==='archer'?'archers':type];
+  const unit={id,type,role:type==='guard'?'footman':type,name:type==='guard'?'Professional footman':type==='militia'?'District militia':type,postId,homePostId:postId,hp:rules.hp,maxHp:rules.hp,
     status:'holding',targetId:null,attackCooldown:0,sheltered:false};
   positionAtPost(state,unit,slot);return unit;
 }
 export function initializeFrontierNpcs(state) {
-  state.guards=Array.from({length:state.frontierGuardCount??CONFIG.frontier.guards.count},(_,i)=>defender(state,'guard',`guard-${i+1}`,'keep',i));
+  state.guards=[];state.archers=[];state.cavalry=[];
+  for(const [settlementIndex,roster] of state.contract.garrisons.entries()) {
+    const homePostId=roster.postId??(settlementIndex===0?'keep':roster.keepId);
+    for(const [field,type,array] of [['footmen','guard',state.guards],['archers','archer',state.archers],['cavalry','cavalry',state.cavalry]]) {
+      for(let i=0;i<roster[field];i++) {
+        const id=type==='guard'&&settlementIndex===0?`guard-${i+1}`:`${type}-${roster.postId??roster.keepId}-${i+1}`;
+        const unit=defender(state,type,id,homePostId,i);unit.keepId=roster.keepId;array.push(unit);
+      }
+    }
+  }
   state.militia=stageFor(state).map.districts.flatMap(d=>Array.from({length:CONFIG.frontier.militia.countPerDistrict},(_,i)=>
     defender(state,'militia',`militia-${d.id}-${i+1}`,d.id,i)));
   createInhabitants(state);
@@ -61,6 +73,7 @@ export function initializeFrontierNpcs(state) {
     const home=state.structures.find(s=>s.id===person.homeId),point=safePost(state,home,person.id);
     person.x=point.x+.5;person.y=point.y+.5;person.status='idle';
   }
+  initializeInfirmaries(state);
 }
 export function requestGuards(state,postId,count) {
   if(state.stageId!=='frontier'||state.phase!=='prep') return {ok:false,reason:'Request guards during preparation only'};
@@ -69,20 +82,22 @@ export function requestGuards(state,postId,count) {
   const level=state.skills.communication,limits=CONFIG.frontier.guardRequestLimits;
   const limit=Object.keys(limits).filter(n=>+n<=level).reduce((n,key)=>Math.max(n,limits[key]),0);
   const guards=state.guards.filter(g=>!g.hired&&alive(g));
+  const atHome=g=>g.postId===(g.homePostId??'keep');
+  const recall=g=>{g.postId=g.homePostId??'keep';positionAtPost(state,g,guards.indexOf(g));};
   if(postId==='keep') {
     if(count>guards.length) return {ok:false,reason:'Not enough professional guards'};
-    const current=guards.filter(g=>g.postId==='keep').length;
+    const current=guards.filter(atHome).length;
     if(count<current) return {ok:false,reason:'Choose a district post to move guards from the keep'};
     let returning=count-current;
-    for(const guard of guards.filter(g=>g.postId!=='keep')) if(returning-->0) {guard.postId='keep';positionAtPost(state,guard,guards.indexOf(guard));}
+    for(const guard of guards.filter(g=>!atHome(g))) if(returning-->0) recall(guard);
     return {ok:true,moved:count,limit};
   }
-  const elsewhere=guards.filter(g=>g.postId!=='keep'&&g.postId!==postId).length;
+  const elsewhere=guards.filter(g=>!atHome(g)&&g.postId!==postId).length;
   if(elsewhere+count>limit) return {ok:false,reason:`Communication ${level}: up to ${limit} reassigned guards`,limit};
   if(elsewhere+count>guards.length) return {ok:false,reason:'Not enough professional guards'};
   const current=guards.filter(g=>g.postId===postId);
-  if(current.length>count) for(const guard of current.slice(count)) {guard.postId='keep';positionAtPost(state,guard,guards.indexOf(guard));}
-  if(current.length<count) for(const guard of guards.filter(g=>g.postId==='keep').slice(0,count-current.length)) {
+  if(current.length>count) for(const guard of current.slice(count)) recall(guard);
+  if(current.length<count) for(const guard of guards.filter(atHome).filter(g=>g.postId!==postId).slice(0,count-current.length)) {
     guard.postId=postId;positionAtPost(state,guard,guards.indexOf(guard));
   }
   return {ok:true,moved:count,limit};
@@ -91,15 +106,15 @@ export function requestGuards(state,postId,count) {
 // Each route is a bounded orthogonal breadth-first search. A failed route is
 // cached until its goal or the structure revision changes: shelter-in-place is
 // an explicit state, rather than an endless attempt to walk through a wall.
-function route(state,unit,x,y,friendly=true) {
+export function route(state,unit,x,y,friendly=true,closedGates=false) {
   const sx=Math.floor(unit.x),sy=Math.floor(unit.y),gx=Math.floor(x),gy=Math.floor(y);
   const goal=key(gx,gy),revision=state.flowRevision??0;
-  if(unit.pathGoal===goal&&unit.pathRevision===revision&&unit.pathFriendly===friendly&&unit.path!==undefined&&
+  if(unit.pathGoal===goal&&unit.pathRevision===revision&&unit.pathFriendly===friendly&&unit.pathClosedGates===closedGates&&unit.path!==undefined&&
     unit.pathX===unit.x&&unit.pathY===unit.y) return unit.path;
   const queue=[{x:sx,y:sy}],seen=new Map([[key(sx,sy),null]]);
   for(let i=0;i<queue.length&&!seen.has(goal);i++) for(const [dx,dy] of directions) {
     const nx=queue[i].x+dx,ny=queue[i].y+dy,k=key(nx,ny);
-    if(seen.has(k)||!npcWalkable(state,nx,ny,friendly)) continue;
+    if(seen.has(k)||!npcWalkable(state,nx,ny,friendly)||(closedGates&&structureAt(state,nx,ny)?.type==='gate')) continue;
     seen.set(k,queue[i]);queue.push({x:nx,y:ny});
   }
   let path=null;
@@ -108,9 +123,24 @@ function route(state,unit,x,y,friendly=true) {
     while(point.x!==sx||point.y!==sy) {path.push(point);point=seen.get(key(point.x,point.y));}
     path.reverse();
   }
-  unit.pathGoal=goal;unit.pathRevision=revision;unit.pathFriendly=friendly;unit.pathX=unit.x;unit.pathY=unit.y;unit.path=path;return path;
+  unit.pathGoal=goal;unit.pathRevision=revision;unit.pathFriendly=friendly;unit.pathClosedGates=closedGates;unit.pathX=unit.x;unit.pathY=unit.y;unit.path=path;return path;
 }
-function travel(state,unit,x,y,distance,friendly=true) {
+// Breadth-first reachability limited to `limit` orthogonal steps.
+export function reachableWithin(state,from,to,limit,friendly=true) {
+  const goal=key(Math.floor(to.x),Math.floor(to.y));
+  let frontier=[[Math.floor(from.x),Math.floor(from.y)]];const seen=new Set([key(...frontier[0])]);
+  for(let depth=0;depth<limit&&frontier.length&&!seen.has(goal);depth++) {
+    const next=[];
+    for(const [x,y] of frontier) for(const [dx,dy] of directions) {
+      const nx=x+dx,ny=y+dy,k=key(nx,ny);
+      if(seen.has(k)||!npcWalkable(state,nx,ny,friendly)) continue;
+      seen.add(k);next.push([nx,ny]);
+    }
+    frontier=next;
+  }
+  return seen.has(goal);
+}
+export function travel(state,unit,x,y,distance,friendly=true) {
   const path=route(state,unit,x,y,friendly);
   if(!path) return 'blocked';
   while(distance>0&&path.length) {
@@ -128,7 +158,8 @@ function travel(state,unit,x,y,distance,friendly=true) {
   unit.pathX=unit.x;unit.pathY=unit.y;
   return path.length||Math.hypot(x-unit.x,y-unit.y)>1e-8?'moving':'arrived';
 }
-function clearRoute(unit) {unit.path=undefined;unit.pathGoal=null;}
+export function clearRoute(unit) {unit.path=undefined;unit.pathGoal=null;}
+export function militaryUnits(state) {return [...(state.guards??[]),...(state.militia??[]),...(state.archers??[]),...(state.cavalry??[])];}
 function accessible(state,building,candidate) {
   return perimeter(building).some(p=>!(p.x===candidate.x&&p.y===candidate.y)&&npcWalkable(state,p.x,p.y));
 }
@@ -145,7 +176,7 @@ function ownerDefenses(state) {
         if(defense.structureIds.length>=CONFIG.frontier.ownerDefense.pieces) break;
         if(!npcWalkable(state,point.x,point.y)||structureAt(state,point.x,point.y)||
           state.inhabitants.some(p=>alive(p)&&Math.floor(p.x)===point.x&&Math.floor(p.y)===point.y)||
-          [...state.guards,...state.militia].some(p=>alive(p)&&Math.floor(p.x)===point.x&&Math.floor(p.y)===point.y)) continue;
+          militaryUnits(state).some(p=>alive(p)&&Math.floor(p.x)===point.x&&Math.floor(p.y)===point.y)) continue;
         const candidate={...point,id:`owner-${building.id}-${defense.structureIds.length}`,type,w:def.w,h:def.h,hp:def.hp,maxHp:def.hp,
           cost:0,paidCost:0,destroyed:false,npcOwned:true,ownerBuildingId:building.id};
         if(!hasTradeRoad(state,candidate)||state.structures.some(s=>s.owner&&alive(s)&&!accessible(state,s,candidate))) continue;
@@ -163,10 +194,12 @@ function ownerDefenses(state) {
 export function startFrontierNpcs(state) {
   ownerDefenses(state);
   for(const person of state.inhabitants) {person.sheltered=false;person.status=person.hp>0?'evacuating':'dead';clearRoute(person);}
-  for(const unit of [...state.guards,...state.militia]) {unit.targetId=null;unit.attackCooldown=0;clearRoute(unit);}
+  for(const unit of militaryUnits(state)) {unit.targetId=null;unit.attackCooldown=0;clearRoute(unit);}
+  initializeInfirmaries(state);
 }
 function stepDefender(state,unit,dt) {
   if(unit.hp<=0) {unit.status='dead';unit.targetId=null;return;}
+  if(unit.healingJourney) return;
   const militia=unit.type==='militia',rules=CONFIG.frontier[militia?'militia':'guards'];
   unit.attackCooldown=Math.max(0,unit.attackCooldown-dt);
   const keep=nearestKeep(state,unit);
@@ -197,10 +230,13 @@ export function stepFrontierNpcs(state,dt) {
     const result=travel(state,person,keep.x+.5,keep.y+.5,CONFIG.inhabitants.fleeSpeed*dt);
     person.status=result==='blocked'?'sheltering':result==='arrived'?'sheltered':'evacuating';person.sheltered=result==='arrived';
   }
+  stepInfirmaries(state,dt);
   for(const unit of [...state.guards,...state.militia]) stepDefender(state,unit,dt);
+  stepArchers(state,dt);
+  stepCavalry(state,dt);
 }
 
-function nearestKeep(state,unit) {
+export function nearestKeep(state,unit) {
   const keeps=state.structures.filter(s=>s.type==='keep'&&alive(s));
   keeps.sort((a,b)=>Math.hypot(a.x-unit.x,a.y-unit.y)-Math.hypot(b.x-unit.x,b.y-unit.y));
   return keeps[0]??state.structures.find(s=>s.type==='keep');
@@ -209,11 +245,14 @@ function nearestKeep(state,unit) {
 // Frontier enemies use the same bounded terrain-aware movement when pursuing
 // people. Canyon's original inhabitant chase remains in enemies.js unchanged.
 export function engageFrontierNpc(state,enemy,speed,dt) {
-  if(enemy.type==='boss') return false;
-  const candidates=[...state.guards,...state.militia,...state.inhabitants].filter(unit=>alive(unit)&&!unit.sheltered&&
+  const soldiers=enemy.type==='boss'?[...(state.archers??[]),...(state.cavalry??[])]:militaryUnits(state);
+  const candidates=[...soldiers,...(enemy.type==='boss'?[]:state.inhabitants)].filter(unit=>alive(unit)&&!unit.sheltered&&!unit.wallNodeId&&
     Math.hypot(unit.x-enemy.x,unit.y-enemy.y)<=CONFIG.inhabitants.chaseRadius);
   candidates.sort((a,b)=>Math.hypot(a.x-enemy.x,a.y-enemy.y)-Math.hypot(b.x-enemy.x,b.y-enemy.y)||String(a.id).localeCompare(String(b.id)));
-  const target=candidates.find(unit=>route(state,enemy,unit.x,unit.y,false)!==null);
+  // The bounded check rejects defenders behind walls cheaply; an unbounded
+  // route() to each of them explored the whole map for every enemy each tick.
+  const limit=Math.ceil(CONFIG.inhabitants.chaseRadius*3);
+  const target=candidates.find(unit=>reachableWithin(state,enemy,unit,limit,false)&&route(state,enemy,unit.x,unit.y,false)!==null);
   if(!target) return false;
   enemy.attackTargetId=target.id;enemy.walkTarget=null;enemy.windupRemaining=0;
   if(Math.hypot(target.x-enemy.x,target.y-enemy.y)<=CONFIG.combat.attackRange) {

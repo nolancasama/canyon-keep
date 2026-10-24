@@ -562,6 +562,51 @@ block; gates pass friendlies. A failed route produces an explicit holding or
 sheltering-in-place state until the map changes. Enemies can kill NPCs and
 civilian deaths feed the casualty deduction. Defender kills pay normal bounties.
 
+Generated settlement garrisons use an independent contract-seed stream and a
+strength budget (footman 1, archer 1.2, cavalry 2). Size, wealth, archetype,
+existing fortifications and raid difficulty contribute to the budget; it is
+clamped to 3–8 strength. Every non-empty combination is possible, including
+single-type rosters; poor settlements are less likely to field cavalry.
+Twin keeps and remote outposts receive independent rosters. The handcrafted
+commission and fallback retain four footmen. Legacy `guards` are footmen and
+retain their post/leash combat and Communication-based preparation requests.
+Briefing lists each roster and role limits. Preparation marks posts,
+battlements/stairs, sortie gates and keep beds; battle shows living military
+counts and care capacity/pool; results record survivors and losses by type.
+
+Each functioning keep offers two infirmary places, healing 3 HP/s per patient
+from its own finite 120-HP siege pool. Footmen, militia, archers and cavalry
+must physically return by friendly routes. The most wounded receive care
+first; nearby reachable combat prevents treatment. Death cannot be reversed,
+golems are ineligible, and destroyed keeps or depleted pools stop care.
+Recovery is latched until 85% HP (cavalry 80%), then units resume their role.
+Retry restores preparation and resets pools when the siege starts again.
+
+Archer battlements are a separate 4-connected network of intact wall, gate,
+spiked, dormant-golem and integrated-tower tiles. Stairs are integrated towers,
+gate-flanking walls and walls touching a keep. Archers walk to reachable stairs,
+climb, and reposition only along their connected line toward threats. Ground
+collision and enemy pathing never use this network. Without reachable stairs
+they defend near the keep on foot. Archers have 60 HP, range 5, damage 6 and
+a 1.4-s shot interval; visible arrows travel at 18 tiles/s. Cliffs and solid
+structures block sight except the shooter's tile. Below 35% HP they descend
+through connected stairs and seek care. Explosion splash and brute slams reach
+them. A lost node drops its archer to adjacent walkable ground (the destroyed
+tile if all neighbors block), costs 12 HP and stuns for 1 s.
+
+Cavalry autonomously wait, sortie through intact gates, engage briefly,
+retreat, return through a valid gate, rest/heal and cool down. Their friendly
+ground graph passes gates and keeps, never intact walls. They favor isolated
+attackers, chiselers/powder carriers and outer farms/roads. They have 130 HP,
+speed 3.2, damage 10 every 1.1 s, plus 10 charge damage on the first hit.
+Sorties last at most 8 s; 40% HP, crowding or a lost target initiates retreat.
+Return replans if a gate is destroyed or blocked; without a gate route home
+they shelter outside the nearest gate and fight defensively. Rest lasts 2 s,
+followed by 12 s cooldown. Caltrops multiply speed/damage by .55, narrow tiles
+(at least two blocked orthogonal neighbors) by .65 and dense groups multiply
+damage by .65. All enemy types can harm ground cavalry. No direct commands
+are provided for any military unit.
+
 The prep mayor panel requests existing guards for named district/property posts.
 Communication 2 allows up to two reassigned guards in total; Communication 3
 allows four. Requesting zero returns that post's guards to the keep. Keep guard
@@ -723,7 +768,7 @@ In battle arrows dim; each front pulses "INCOMING" 5 s before its first
 entry (`frontWarning` event, `state.frontWarnings`). The handcrafted contract
 keeps its single eastern schedule and label.
 
-Seeds vary terrain, roads, property/population, keep positions, guard counts,
+Seeds vary terrain, roads, property/population, keep positions, garrison rosters,
 siege plans and entries, owner names/requests and special objectives.
 Construction budgets come from deterministic settlement geometry, independent
 of assessed value and raider counts. A pure enclosure estimator selects core

@@ -23,7 +23,7 @@ export function stepTowers(state,dt) {
   for(const arrow of state.arrows) {
     const target=state.enemies.find(enemy=>enemy.id===arrow.targetId);
     if(!target || target.hp<=0) continue;
-    const dx=target.x-arrow.x,dy=target.y-arrow.y,distance=Math.hypot(dx,dy),travel=config.projectileSpeed*dt;
+    const dx=target.x-arrow.x,dy=target.y-arrow.y,distance=Math.hypot(dx,dy),travel=(arrow.projectileSpeed??config.projectileSpeed)*dt;
     if(distance<=travel) damageEnemy(state,target,arrow.damage);
     else {arrow.x+=dx/distance*travel;arrow.y+=dy/distance*travel;remaining.push(arrow);}
   }

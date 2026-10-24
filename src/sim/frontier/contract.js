@@ -29,19 +29,22 @@ export function initializeFrontier(state,options={}) {
   const specialObjectives=generated?.specialObjectives??[];
   mandatoryObjectives.push(...specialObjectives.filter(s=>s.mandatory));
   const seed=generated?.seed??frontierSeed(options.seed??state.rng.seed);
+  const garrisons=generated?.garrisons??[{keepId:state.structures.find(s=>s.type==='keep').id,
+    name:state.structures.find(s=>s.type==='keep').label,footmen:rules.guards.count,archers:0,cavalry:0,
+    budget:rules.guards.count,strength:rules.guards.count}];
   state.contract={id:generated?`frontier-${seed}-${generated.archetype}`:'eastbank-commission',seed,archetype:generated?.archetype??'handcrafted',
     generated:!!generated,generation:generated?.generation??{attempts:0,fallback:false},mayor,budget,baseFee:rules.baseFee,
     budgetPlan:generated?.budgetPlan??frontierBudgetPlan(map,state.structures,'handcrafted',budget),
     damageLiability:rules.damageLiability,assessment,requests,journal,briefingOpen:true,
     reputation:0,paid:false,earnings:0,ownerAdvances:0,
-    mandatoryObjectives,specialObjectives,
+    mandatoryObjectives,specialObjectives,garrisons,
     briefing:{title:'The Frontier Commission',mayor,
       text:'Eastbank is already built, and its people are counting on you. Spend the council’s construction budget where it will matter most. The keep must stand; the outlying farms and hamlet need difficult choices.',
       seed,archetype:generated?.archetype??'handcrafted',budget,expectedThreats:siege.scoutReport[0],
       mainObjective:mandatoryObjectives.map(s=>s.label).join('; '),totalValueAtRisk,baseFee:rules.baseFee,
       possibleBonuses:[{label:'All civilians survive',amount:rules.bonuses.allCivilians},{label:'Workshop survives',amount:rules.bonuses.workshop}],
       damageRule:`New property damage deducts ${rules.damageLiability*100}% of assessed liability; ${rules.casualtyPenalty} G per civilian lost. No charge for pre-existing damage. Deductions cannot exceed the base fee.`,
-      mandatoryObjectives:mandatoryObjectives.map(s=>s.label),specialObjectives,
+      mandatoryObjectives:mandatoryObjectives.map(s=>s.label),specialObjectives,garrisons,
     },
   };
   state.journal=journal;
@@ -160,7 +163,11 @@ export function calculateContractResults(state) {
     before:money(damageByBuilding.filter(b=>b.district===d.id).reduce((n,b)=>n+b.assessed,0)),
     liability:money(damageByBuilding.filter(b=>b.district===d.id).reduce((n,b)=>n+b.liability,0)),
     destroyed:damageByBuilding.filter(b=>b.district===d.id&&b.destroyed).length}));
+  const militaryGroups={footmen:state.guards??[],archers:state.archers??[],cavalry:state.cavalry??[],militia:state.militia??[]};
+  const militarySurvivors=Object.fromEntries(Object.entries(militaryGroups).map(([type,units])=>[type,units.filter(s=>s.hp>0).length]));
+  const militaryLosses=Object.fromEntries(Object.entries(militaryGroups).map(([type,units])=>[type,units.filter(s=>s.hp<=0).length]));
   return {stageId:'frontier',result:success?'victory':'defeat',outcome:success?'Contract fulfilled':'Contract failed',
+    militarySurvivors,militaryLosses,
     totalValueBefore,valuePreserved,preservation:percentage(preservation),liability,damageByBuilding,damageByDistrict,
     civilianLosses,inhabitantsLost:civilianLosses,inhabitantsSaved:state.population-civilianLosses,
     promisesKept,promisesBroken,reputation:-promisesBroken,ownerRewards,ownerRewardTotal,thankYouPayments,thankYouTotal,

@@ -63,12 +63,14 @@ test('civilians shelter in place when enclosed and evacuate through a gate witho
   assert.equal(person.status,'sheltered','bounded evacuation reaches the keep after a gate opens');
 });
 
-test('militia retreat below thirty percent HP and enemies can kill defenders',()=>{
+test('militia retreat below thirty percent HP, recover at the infirmary and enemies can kill defenders',()=>{
   const state=frontier().state,militia=state.militia[0];
   state.guards=[];state.inhabitants=[];state.militia=[militia];
   militia.x=8.5;militia.y=18.5;militia.hp=militia.maxHp*.29;
   stepFrontierNpcs(state,1/60);assert.equal(militia.status,'retreating');
-  advance(state,120);assert.equal(militia.status,'sheltered');
+  advance(state,120);assert.equal(militia.status,'holding');
+  assert.ok(militia.hp>=militia.maxHp*CONFIG.frontier.infirmary.recoverFraction);
+  assert.equal(militia.retreating,false);
   militia.sheltered=false;militia.x=8.5;militia.y=18.5;militia.hp=1;
   const enemy=spawnEnemy(state,'foot',8.5,18.5);
   assert.equal(engageFrontierNpc(state,enemy,CONFIG.enemies.foot.speed,1),true);

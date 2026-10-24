@@ -962,3 +962,66 @@ Golems (Frontier)
   preserves all mandatory routes. Footpath/decorative metadata is ignored.
 - Frontier breach costs are per-type HP weights with a gate multiplier, cached
   by enemy type/target/revision. Canyon keeps the original shared field/costs.
+
+## 2026-10-25 — Frontier Commission Phases C/D implementation notes
+
+- Frozen garrison/infirmary/archer/cavalry decisions implemented only for
+  Frontier. The existing character-creation work is preserved; this file had
+  Phase A notes and the frozen design but no separately labelled Phase B notes.
+  DESIGN.md is absent; SPEC.md remains authoritative. CURRENT_STATE.md was
+  read and left untouched. No golem redesign is included.
+- Generated garrisons use a separate seed stream per settlement so adding
+  rosters does not consume terrain/siege/request RNG. Independent twin keeps
+  and the remote outpost get rosters; outpost patients use the main keep.
+  Handcrafted/fallback retain four footmen. `guards` keeps its compatibility
+  name and AI, with `role: 'footman'`. Home posts/keep IDs distinguish twin
+  returns; Communication requests still move existing footmen only.
+- Final roster costs: footmen 1, archers 1.2, cavalry 2. Budget is the floored
+  3–8 clamp of (2 + .35 × property count + .002 × property face value × wealth
+  + .5 × existing military pieces + .03 × raid strength) × archetype factor
+  (Compact 1, Twin .85, Outpost .9). Wealth is seeded in [.65,1.35]. Type
+  weights are 1/1/.65; below .9 wealth cavalry weight and inclusion chance
+  multiply by .25. Independent type inclusion chance is .5, with a weighted
+  non-empty fallback. Purchases never exceed strength budget.
+- Every living keep starts each siege with two beds, 3 HP/s per patient,
+  120 HP total. Most wounded by HP fraction get priority (stable ID ties).
+  Conventional units travel normally; archers descend their connected line,
+  cavalry first finish their gate return. Treatment pauses for reachable
+  enemies within 1 tile. Recovery hysteresis: footmen/militia 30% trigger,
+  archers 35%, cavalry 40%; release at 85% (cavalry 80%). Unreachable/depleted
+  care retries at 1 s. No resurrecting, golem care or destroyed-keep care.
+  Old militia coverage now checks return to post after recovery instead of
+  permanent shelter, preserving the retreat and enemy-death assertions.
+- Wall topology is read-only, orthogonal and independent of collision/flows.
+  Integrated towers require an adjacent eligible wall node. Archers climb and
+  descend at walking speed, never jump components; blocked stairs leave an
+  explicit stranded-wall state. Lost nodes land on adjacent safe ground,
+  falling back to the destroyed tile if surrounded. Final archer values:
+  HP 60, speed 1.8, range 5, damage 6, interval 1.4 s, projectile speed 18,
+  fall damage 12, stun 1 s, threat/access scan interval .5 s. Tower stats stay
+  range 6.5 / damage 12 / 1 shot per second.
+- Final cavalry values: HP 130, speed 3.2, damage 10, interval 1.1 s,
+  first-hit bonus 10, sortie limit 8 s, rest 2 s, cooldown 12 s. Target radius
+  18, group radius 2.5, maximum target group 3; three nearby foes trigger
+  retreat. Caltrops speed/damage .55, narrow speed/damage .65 (two blocked
+  neighbors), dense damage .65. Decisions every .75 s; farm/road priority
+  radius 5, specialist score +3, road/farm score +2. Return routes require
+  an intact gate even when a destroyed gate leaves open ground; otherwise
+  riders shelter outside a gate and defend until a valid route exists.
+- Ground archers/riders join enemy targeting, blast/slam damage and build/
+  retractable occupancy checks. Mounted archers avoid only ground targeting
+  and occupancy. Shared arrows keep ordinary tower behavior and allow a
+  per-projectile speed. UI adds concise rosters, map symbols, live counts/
+  pool and per-type survivors/losses without selection or battle orders.
+
+## 2026-10-25 — Phase C/D completion notes (controller)
+
+- Codex stopped at its usage limit before the final test run; the controller
+  completed the phase. Infirmary patients inside a keep are `sheltered` (like
+  evacuees) so raiders outside stop pathing to them.
+- Combat-contact and enemy-chase checks use a bounded reachability search
+  (`reachableWithin`, ≤ 3× chase radius) before any full route. Unbounded
+  searches toward unreachable defenders made one generated siege take 138 s.
+  Rejected: caching failed routes per enemy (enemies move every tick).
+- A brute already in its slam windup completes the slam rather than switching
+  to a nearby defender; the slam is its area threat to archers and cavalry.

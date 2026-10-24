@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { emit, damageStructure, damageGolem, blocksStructure } from './grid.js';
 import { damageEnemy } from './enemies.js';
+import { militaryUnits } from './frontier/npcs.js';
 
 export function queueExplosion(state,carrier) {
   if (carrier.detonated) return false;
@@ -42,7 +43,7 @@ export function stepExplosions(state) {
       const distance=Math.hypot(golem.x-blast.x,golem.y-blast.y);
       if(distance<=config.radius) damageGolem(state,golem,config.unitDamage*falloff(distance));
     }
-    if(state.stageId==='frontier') for(const npc of [...state.guards,...state.militia]) if(npc.hp>0) {
+    if(state.stageId==='frontier') for(const npc of militaryUnits(state)) if(npc.hp>0) {
       const distance=Math.hypot(npc.x-blast.x,npc.y-blast.y);
       if(distance<=config.radius) npc.hp=Math.max(0,npc.hp-config.unitDamage*falloff(distance));
     }

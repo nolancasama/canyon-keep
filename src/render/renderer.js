@@ -2,6 +2,7 @@ import { SITES } from '../data/map.js';
 import { CONFIG } from '../config.js';
 import { stageFor } from '../data/stages.js';
 import { launcherLane } from '../sim/mechanisms.js';
+import { wallNetwork } from '../sim/frontier/archers.js';
 import { createTerrain, createFrontierTerrain, createFloorClip, TILE } from './terrain.js';
 import { Effects } from './effects.js';
 
@@ -36,7 +37,7 @@ export class Renderer {
     this.overlays(c,state,ui);
     for(const s of state.structures||[])if(!s.destroyed&&s.hp>0)this.structure(c,s,state);
     if(state.stageId==='frontier'){for(const site of state.constructionSites||[])this.constructionSite(c,site);for(const s of state.structures)if(!s.destroyed&&s.hp>0&&s.emergencyRepair?.status==='repairing')this.repairProgress(c,s);}
-    if(state.stageId==='frontier')this.frontierProperties(c,state,ui);
+    if(state.stageId==='frontier'){this.frontierProperties(c,state,ui);if(state.phase==='prep')this.garrisonPreparation(c,state,ui);}
     this.mechanismLinks(c,state,ui);
     this.sweepWarnings(c,state,ui);
     if(state.phase==='prep'){
@@ -49,6 +50,8 @@ export class Renderer {
     for(const h of state.inhabitants||[])if(h.hp>0&&!h.sheltered)this.inhabitant(c,h,state);
     for(const g of state.guards||[])if(g.hp>0)this.guard(c,g);
     for(const g of state.militia||[])if(g.hp>0&&!g.sheltered)this.guard(c,g);
+    for(const g of state.archers||[])if(g.hp>0)this.archer(c,g);
+    for(const g of state.cavalry||[])if(g.hp>0)this.cavalry(c,g);
     for(const g of state.golems||[])if(g.hp>0&&g.status!=='crumbled')this.golem(c,g,state);
     for(const e of [...(state.enemies||[])].filter(e=>e.hp>0&&!e.dead).sort((a,b)=>a.y-b.y))this.enemy(c,e,state);
     for(const a of state.arrows||[]){const target=state.enemies.find(e=>e.id===a.targetId);const angle=target?Math.atan2(target.y-a.y,target.x-a.x):0;c.save();c.translate(a.x*TILE,a.y*TILE);c.rotate(angle);line(c,-7,0,4,0,'#f1dfa5',1.5);line(c,4,0,1,-2,'#f1dfa5');c.restore();}
@@ -89,6 +92,32 @@ export class Renderer {
       if(selected||s.destroyed){c.fillStyle='#ecdfbb';c.font='9px system-ui';c.textAlign='center';c.fillText(`${s.label||s.type}${s.destroyed?' · LOST':''}`,x+w/2,y+h+12);}
     }c.restore();
   }
+  garrisonPreparation(c,state,ui){
+    c.save();c.font='9px system-ui';c.textAlign='center';
+    const posts=new Map();
+    for(const unit of [...(state.guards||[]),...(state.archers||[]),...(state.cavalry||[])]) {
+      const id=unit.postId??unit.keepId;if(!posts.has(id))posts.set(id,{x:unit.postX??unit.x,y:unit.postY??unit.y,count:0});posts.get(id).count++;
+    }
+    for(const post of posts.values()){const x=post.x*TILE,y=post.y*TILE;c.strokeStyle='#91c4d080';c.setLineDash([3,3]);c.strokeRect(x-11,y-11,22,22);c.setLineDash([]);c.fillStyle='#c3e2de';c.fillText(`POST · ${post.count}`,x,y+23);}
+    for(const node of wallNetwork(state)) {
+      const x=(node.x+.5)*TILE,y=(node.y+.5)*TILE;c.strokeStyle=node.access?'#a8e4c0':'#8fc4b280';c.lineWidth=node.access?2:1;c.strokeRect(x-5,y-5,10,10);
+      if(node.access){line(c,x-4,y+3,x+4,y-3,'#cff2bd',1.5);if(ui.hover?.x===node.x&&ui.hover?.y===node.y){c.fillStyle='#e4efd0';c.fillText('ARCHER ACCESS',x,y-17);}}
+    }
+    for(const gate of state.structures.filter(s=>s.type==='gate'&&!s.destroyed&&s.hp>0)) {
+      const x=(gate.x+.5)*TILE,y=(gate.y+.5)*TILE;line(c,x-6,y+13,x+6,y+13,'#e7c08e',2);line(c,x+6,y+13,x+2,y+10,'#e7c08e',2);if(ui.hover?.x===gate.x&&ui.hover?.y===gate.y){c.fillStyle='#f1d5a4';c.fillText('SORTIE GATE',x,y-15);}
+    }
+    for(const keep of state.structures.filter(s=>s.type==='keep'&&!s.destroyed&&s.hp>0)) {
+      const x=(keep.x+keep.w/2)*TILE,y=(keep.y+keep.h)*TILE+24;line(c,x-29,y-3,x-21,y-3,'#bde0b5',2);line(c,x-25,y-7,x-25,y+1,'#bde0b5',2);c.fillStyle='#d5e9c4';c.fillText(`${CONFIG.frontier.infirmary.patients} beds · ${CONFIG.frontier.infirmary.pool} HP`,x+9,y);
+    }
+    c.restore();
+  }
+  archer(c,g){
+    const x=g.x*TILE,y=g.y*TILE-(g.wallNodeId?5:0);c.save();circle(c,x,y+3,6,'#253a32');c.fillStyle='#7f9e69';c.fillRect(x-3,y-3,7,9);circle(c,x,y-7,3.5,'#d8bc97');line(c,x-4,y-10,x+4,y-10,'#a9bb83',2);c.strokeStyle='#dbc789';c.lineWidth=1.5;c.beginPath();c.arc(x+4,y-2,7,-Math.PI/2,Math.PI/2);c.stroke();line(c,x+4,y-9,x+4,y+5,'#e3dab4');if(g.hp<g.maxHp)bar(c,x,y-16,17,g.hp,g.maxHp);if(g.status==='healing')this.healingMarker(c,x,y+12);c.restore();
+  }
+  cavalry(c,g){
+    const x=g.x*TILE,y=g.y*TILE,step=['sortie','retreat','return'].includes(g.status)?Math.sin(this.visualTime*13)*2:0;c.save();c.fillStyle='#9d805c';c.beginPath();c.ellipse(x,y+3,10,5,0,0,TAU);c.fill();line(c,x+6,y+1,x+9,y-7,'#9d805c',5);circle(c,x+10,y-8,3.5,'#ac9067');for(const dx of [-6,5])line(c,x+dx,y+5,x+dx+step,y+11,'#695941',2);c.fillStyle='#7e9ba9';c.fillRect(x-3,y-7,7,9);circle(c,x,y-11,3.5,'#d8bc97');line(c,x-4,y-14,x+4,y-14,'#d5d7bd',2);line(c,x+5,y-3,x+14,y-18,'#ded8ac',1.5);if(g.hp<g.maxHp)bar(c,x,y-20,22,g.hp,g.maxHp);if(g.status==='healing')this.healingMarker(c,x,y+15);c.restore();
+  }
+  healingMarker(c,x,y){line(c,x-3,y,x+3,y,'#c7edab',2);line(c,x,y-3,x,y+3,'#c7edab',2);}
   guard(c,g){const x=g.x*TILE,y=g.y*TILE,militia=g.type==='militia',attacking=g.status==='engaging'||g.status==='attacking',swing=attacking?Math.sin(this.visualTime*10)*3:0;c.save();circle(c,x,y+2,7,'#263630');c.fillStyle=militia?'#b79a66':g.hired?'#b18c85':'#7da3ad';c.fillRect(x-4,y-3,8,10);circle(c,x,y-6,4,'#d8bc97');if(!militia)line(c,x-4,y-9,x+4,y-9,'#d2d8c0',3);line(c,x+7,y+5,x+7+swing,y-13,'#d2ceae',1.5);if(militia){line(c,x+4,y-10,x+10,y-10,'#dfcf96',1.5);line(c,x+4,y-10,x+4,y-14,'#dfcf96');line(c,x+10,y-10,x+10,y-14,'#dfcf96');}else{c.fillStyle=g.hired?'#935f55':'#5d7f8c';c.fillRect(x-8,y-1,5,8);}if(g.status==='retreating'){line(c,x-5,y+12,x,y+15,'#efc67c',1.5);line(c,x,y+15,x+5,y+12,'#efc67c',1.5);}if(g.hp<g.maxHp)bar(c,x,y-16,18,g.hp,g.maxHp);c.restore();}
   repairProgress(c,s){const x=(s.x+.5)*TILE,y=(s.y+.5)*TILE,r=s.emergencyRepair,q=Math.min(1,r.restored/r.amount);c.save();c.strokeStyle='#183938';c.lineWidth=4;c.beginPath();c.arc(x,y,12,0,TAU);c.stroke();c.strokeStyle='#8de3e3';c.lineWidth=2.5;c.beginPath();c.arc(x,y,12,-Math.PI/2,-Math.PI/2+q*TAU);c.stroke();line(c,x-3,y,x+3,y,'#d4ffff',2);line(c,x,y-3,x,y+3,'#d4ffff',2);c.restore();}
   constructionSite(c,site){const x=(site.x+.5)*TILE,y=(site.y+.5)*TILE,q=Math.min(1,(site.elapsed||0)/(site.duration||CONFIG.frontier.buildTime)),waiting=site.status!=='building';c.save();c.fillStyle='#d9bf6630';c.fillRect(site.x*TILE+1,site.y*TILE+1,(site.w||1)*TILE-2,(site.h||1)*TILE-2);c.strokeStyle=waiting?'#ef9d6f':'#e6d18f';c.setLineDash([3,3]);c.strokeRect(site.x*TILE+1,site.y*TILE+1,(site.w||1)*TILE-2,(site.h||1)*TILE-2);c.setLineDash([]);line(c,x-5,y+4,x+5,y-4,'#b99a6a',3);c.strokeStyle='#283a35';c.lineWidth=3;c.beginPath();c.arc(x,y,8,0,TAU);c.stroke();c.strokeStyle=waiting?'#f4a478':'#f4d98e';c.beginPath();c.arc(x,y,8,-Math.PI/2,-Math.PI/2+q*TAU);c.stroke();if(waiting){c.fillStyle='#f4d98e';c.font='bold 10px system-ui';c.textAlign='center';c.fillText('Ⅱ',x,y+4);}c.restore();}

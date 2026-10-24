@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../src/config.js';
 import { createGame } from '../src/sim/campaign.js';
-import { generateFrontierContract, validateFrontierContract, frontierSeed } from '../src/sim/frontier/generator.js';
+import { generateFrontierContract, generateGarrisons, validateFrontierContract, frontierSeed } from '../src/sim/frontier/generator.js';
 import { FRONTIER_MAP } from '../src/data/frontier/map.js';
 import { FRONTIER_ARCHETYPES } from '../src/data/frontier/templates.js';
 import { objectiveMet, calculateContractResults } from '../src/sim/frontier/contract.js';
@@ -77,7 +77,7 @@ test('generated Frontier contracts reuse requests, NPCs, actual scout schedule, 
   const game=createGame({stage:'frontier',generated:true,seed:9,archetype:'twin'}),initial=structuredClone(game.state);
   assert.equal(game.state.contract.mandatoryObjectives.filter(s=>s.id.startsWith('keep')).length,2);
   assert.equal(game.state.structures.filter(s=>s.type==='keep').length,2,'HARNESS_PRECONDITION_FAILED: generated twin keeps');
-  assert.ok(game.state.contract.requests.length>=4);assert.ok(game.state.guards.length>0&&game.state.militia.length>=3);
+  assert.ok(game.state.contract.requests.length>=4);assert.ok(game.state.guards.length+game.state.archers.length+game.state.cavalry.length>0&&game.state.militia.length>=3);
   const fronts=scheduleFor(game.state).map(e=>e.front),report=game.state.scoutReport.bullets.join(' ');
   for(const front of game.state.frontierSiege.plan.fronts) assert.ok(fronts.includes(front.id)&&report.includes(front.name),`scout report names the ${front.name} front`);
   assert.equal(game.api.startSiege().ok,true,'HARNESS_PRECONDITION_FAILED: generated trade access');
@@ -85,6 +85,36 @@ test('generated Frontier contracts reuse requests, NPCs, actual scout schedule, 
   assert.equal(game.state.phase,'defeat');assert.equal(game.state.results.result,'defeat');
   assert.equal(game.api.retrySiege(),true);assert.deepEqual(game.state,initial);
   game.api.restartCampaign();assert.deepEqual(game.state,initial);
+});
+
+test('generated garrisons are deterministic, independently budgeted and allow every single-type roster',()=>{
+  const types=['footmen','archers','cavalry'],seen=new Set(),single=new Set(),missing=new Set();let independentTwins=false,poorCavalry=false;
+  for(const archetype of Object.keys(FRONTIER_ARCHETYPES)) {
+    const contract=generateFrontierContract(1,archetype);
+    assert.deepEqual(contract.garrisons,generateGarrisons(1,archetype,contract.map,contract.structures,contract.siege));
+    for(let seed=0;seed<60;seed++) {
+      const rosters=generateGarrisons(seed,archetype,contract.map,contract.structures,contract.siege);
+      assert.deepEqual(rosters,generateGarrisons(seed,archetype,contract.map,contract.structures,contract.siege));
+      assert.equal(rosters.length,contract.structures.filter(s=>s.type==='keep').length+(archetype==='outpost'?1:0));
+      if(archetype==='twin') {
+        assert.notEqual(rosters[0].keepId,rosters[1].keepId);
+        if(types.some(type=>rosters[0][type]!==rosters[1][type])) independentTwins=true;
+      }
+      for(const roster of rosters) {
+        const present=types.filter(type=>roster[type]>0),strength=types.reduce((n,type)=>n+roster[type]*CONFIG.frontier.garrison.costs[type],0);
+        assert.ok(present.length>0,`${archetype}/${seed} has defenders`);
+        assert.ok(strength<=roster.budget+1e-9,`${archetype}/${seed} strength ${strength} exceeds ${roster.budget}`);
+        assert.ok(Math.abs(strength-roster.strength)<1e-9);
+        for(const type of types) (roster[type]>0?seen:missing).add(type);
+        if(present.length===1) single.add(present[0]);
+        if(roster.wealth<CONFIG.frontier.garrison.poorThreshold&&roster.cavalry>0) poorCavalry=true;
+      }
+    }
+  }
+  assert.deepEqual([...seen].sort(),[...types].sort());assert.deepEqual([...missing].sort(),[...types].sort());
+  assert.deepEqual([...single].sort(),[...types].sort());assert.ok(independentTwins);assert.ok(poorCavalry);
+  const authored=createGame({stage:'frontier'}).state;
+  assert.equal(authored.guards.length,4);assert.equal(authored.archers.length,0);assert.equal(authored.cavalry.length,0);
 });
 
 test('generated special objectives itemize building and eighty-percent farming outcomes',()=>{

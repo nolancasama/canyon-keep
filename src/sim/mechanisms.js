@@ -92,7 +92,7 @@ function fireBolt(state,device) {
 
 function occupied(state,s) {
   const units=[...state.enemies,...state.inhabitants,...(state.golems??[]).filter(g=>g.status==='active'),
-    ...(state.stageId==='frontier'?[...state.guards,...state.militia]:[])];
+    ...(state.stageId==='frontier'?[...state.guards,...state.militia,...(state.archers??[]).filter(u=>!u.wallNodeId),...(state.cavalry??[])]:[])];
   return units.some(u=>u.hp>0&&(Math.hypot(u.x-s.x-.5,u.y-s.y-.5)<=CONFIG.retractable.occupancyRadius ||
     u.x>=s.x&&u.y>=s.y&&u.x<s.x+1&&u.y<s.y+1));
 }

@@ -3,7 +3,7 @@ import { structureAt, blockingAt, blocksStructure, isWalkable, emit, damageStruc
 import { nextStep } from './pathing.js';
 import { queueExplosion } from './explosions.js';
 import { stageFor, siegeFor } from '../data/stages.js';
-import { engageFrontierNpc } from './frontier/npcs.js';
+import { engageFrontierNpc, militaryUnits } from './frontier/npcs.js';
 import { awardFrontierBounty } from './frontier/economy.js';
 
 export const isAlive = enemy => enemy.hp > 0;
@@ -87,7 +87,7 @@ function slam(state,enemy,target) {
   const y=Math.max(target.y,Math.min(enemy.y,target.y+target.h));
   for(const s of [...state.structures]) if(s.hp>0 && !s.destroyed && distanceToStructure({x,y},s)<=spec.slamRadius) damageStructure(state,s,spec.slamDamage,'enemy');
   for(const other of state.enemies) if(other.id!==enemy.id && other.hp>0 && Math.hypot(other.x-x,other.y-y)<=spec.slamRadius) damageEnemy(state,other,spec.slamDamage);
-  if(state.stageId==='frontier') for(const unit of [...state.guards,...state.militia,...state.inhabitants]) {
+  if(state.stageId==='frontier') for(const unit of [...militaryUnits(state),...state.inhabitants]) {
     if(unit.hp<=0||unit.sheltered||Math.hypot(unit.x-x,unit.y-y)>spec.slamRadius) continue;
     unit.hp=Math.max(0,unit.hp-spec.slamDamage);
     if(unit.hp<=0) {unit.status='dead';emit(state,'npcDeath',{id:unit.id,npcType:unit.type??'civilian',x:unit.x,y:unit.y});}
@@ -162,7 +162,10 @@ export function stepEnemies(state,dt) {
       } else {enemy.attackPhase='moving';moveToward(state,enemy,golem.x,golem.y,speed*dt);}
       continue;
     }
-    if(state.stageId==='frontier'&&engageFrontierNpc(state,enemy,speed,dt)) continue;
+    // A committed brute windup resolves as a slam instead of switching to a
+    // nearby defender; that slam is the brute's area threat to garrisons.
+    const committed=enemy.type==='boss'&&enemy.attackPhase==='windup';
+    if(state.stageId==='frontier'&&!committed&&engageFrontierNpc(state,enemy,speed,dt)) continue;
     const inhabitant=state.stageId!=='frontier'&&!keepOnly&&state.inhabitants.find(person=>person.hp>0 && !person.sheltered && Math.hypot(person.x-enemy.x,person.y-enemy.y)<=CONFIG.inhabitants.chaseRadius);
     if(inhabitant) {
       if(!attackInhabitant(state,enemy,inhabitant,dt)) {

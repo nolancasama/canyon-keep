@@ -58,6 +58,35 @@ test('Frontier geometry budgets support distinct public-action defenses across e
   assert.ok(table.some(row=>row.wins!=='8/8'||row.preserved<98),'increased budgets do not make every approach a near-total-preservation victory');
 });
 
+test('naturally seeded footmen-only, archer-only, cavalry-only and mixed garrisons support engineering victories',()=>{
+  const types=['footmen','archers','cavalry'],selected={footmen:[],archers:[],cavalry:[],mixed:[]};
+  for(let seed=1;seed<=128&&Object.values(selected).some(seeds=>seeds.length<2);seed++) {
+    const brief=generateFrontierContract(seed,'compact');
+    if(brief.generation.fallback||brief.specialObjectives.some(g=>g.mandatory)) continue;
+    const roster=brief.garrisons[0],present=types.filter(type=>roster[type]>0),category=present.length===1?present[0]:'mixed';
+    if(selected[category].length<2) selected[category].push(seed);
+  }
+  const rows=[];
+  for(const [category,seeds] of Object.entries(selected)) {
+    assert.equal(seeds.length,2,`two natural ${category} seeds found`);
+    let wins=0,bareWins=0,preserved=0,barePreserved=0;
+    for(const seed of seeds) {
+      for(const engineered of [true,false]) {
+        const game=createGame({stage:'frontier',generated:true,seed,archetype:'compact'});
+        const spent=engineered?applyBudgetStrategy(game,'scouted fronts').spent:0;
+        const result=finishFrontier(game);
+        if(engineered) {wins+=result.result==='victory';preserved+=result.preservation;}
+        else {bareWins+=result.result==='victory';barePreserved+=result.preservation;}
+        rows.push({category,seed,engineered,roster:game.state.contract.garrisons[0],...frontierBalanceRow(game,category,spent)});
+      }
+    }
+    assert.ok(wins>=1,`${category} garrison can win with sensible engineering`);
+    assert.ok(preserved>barePreserved,`${category} defenders still need engineering to preserve property`);
+    assert.ok(bareWins<wins||barePreserved<preserved);
+  }
+  console.log('Frontier garrison balance sweep',JSON.stringify(rows));
+});
+
 test('Frontier guard reassignment trades keep protection for exposed farming property in a controlled raid',()=>{
   const run=reassign=>{
     const game=createGame({stage:'frontier',seed:123456,skills:{communication:3}});
