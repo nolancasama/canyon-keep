@@ -42,6 +42,10 @@ export function stepExplosions(state) {
       const distance=Math.hypot(golem.x-blast.x,golem.y-blast.y);
       if(distance<=config.radius) damageGolem(state,golem,config.unitDamage*falloff(distance));
     }
+    if(state.stageId==='frontier') for(const npc of [...state.guards,...state.militia]) if(npc.hp>0) {
+      const distance=Math.hypot(npc.x-blast.x,npc.y-blast.y);
+      if(distance<=config.radius) npc.hp=Math.max(0,npc.hp-config.unitDamage*falloff(distance));
+    }
     const tiles=structureTiles(state,blast.x,blast.y,config.radius).slice(0,config.structureTileCap);
     for(const tile of tiles) damageStructure(state,tile.structure,config.structureDamage*falloff(tile.distance));
     emit(state,'explosion',{x:blast.x,y:blast.y,radius:config.radius,structureTiles:tiles.map(t=>({x:t.x,y:t.y,id:t.structure.id})),sourceId:blast.sourceId});

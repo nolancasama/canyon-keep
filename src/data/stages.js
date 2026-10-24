@@ -10,9 +10,9 @@ export const STAGES = {
     settlement:'campaign',sieges:SIEGES,rewardModel:'campaign',allowedTools:[...tools,'pendulum'],
     flags:{battleConstruction:false,contractPayment:false,npcDefenders:false,growth:true} },
   frontier: { id:'frontier',name:'The Frontier Commission',map:FRONTIER_MAP,
-    settlement:'frontier',sieges:{1:FRONTIER_SIEGE},rewardModel:'contract',allowedTools:tools,
+    settlement:'frontier',sieges:{1:FRONTIER_SIEGE},rewardModel:'contract',allowedTools:[...tools,'palisade','caltrops'],
     targeting:choosePropertyTarget,
-    flags:{battleConstruction:false,contractPayment:true,npcDefenders:false,growth:false} },
+    flags:{battleConstruction:true,contractPayment:true,npcDefenders:true,growth:false} },
 };
 export const stageFor = state => STAGES[state?.stageId]??STAGES.canyon;
 export const siegeFor = state => stageFor(state).sieges[state.siegeIndex??1];

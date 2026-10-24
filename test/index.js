@@ -13,3 +13,5 @@ import './effects.test.js';
 import './bounties.test.js';
 import './mechanisms.test.js';
 import './frontier.test.js';
+import './frontier-npcs.test.js';
+import './frontier-construction.test.js';

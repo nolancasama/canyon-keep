@@ -1,11 +1,13 @@
 # Current State
 
 ## Status
-The Frontier Commission slice 1 (Milestones A + B) adds an independently
-selectable handcrafted contract with owned property, requests, negotiation,
-damage-based payment and an exact retry snapshot. The title also opens the
-existing canyon campaign. Frontier guards are static placeholders; self-defense
-choices are recorded for the next slice. Controller acceptance remains pending.
+The Frontier Commission slices 1–2 (Milestones A–D) implement a selectable
+handcrafted contract, owner requests, whole-gold accounting, autonomous guards
+and militia, civilian evacuation, Communication-gated reassignment, owner
+self-defense and battle-time makeshift construction. The centered title opens
+either stage. Frontier has 24 civilian buildings plus the keep, branching roads
+and a bending river. Slice 1 is accepted (22a87bd); slice 2 is implemented for
+controller review, with verification recorded below. Canyon rules are unchanged.
 
 Fortress Engineer milestones 1–4 implemented: bounties, settlement growth,
 spiked/golem walls, trigger mechanisms, scout intel, impact feedback and balance fixtures,
@@ -115,7 +117,17 @@ Frontier observations use this same read-only presentation surface:
 `state.stageId === 'frontier'`, `contract` (acceptance assessment, requests,
 briefing, paid flag, earnings, owner advances, local reputation), `structures`
 (owner/value/importance/objectives/promise), `journal`, `skills.communication`,
-`guards` (assigned post and placeholder flag), and itemized `results`.
+`guards`, `militia`, `inhabitants` and itemized `results`.
+NPC semantic states are read-only observations on `window.__game.state`:
+`status` (holding/engaging/returning/retreating/sheltering/sheltered/dead;
+civilians idle/evacuating/sheltering/sheltered/dead), `postId`, `postX/postY`,
+`targetId`, `hp`, `retreating`, `sheltered`, and bounded path state/revision.
+`constructionSites` exposes `type`, footprint, `elapsed`, `duration` and
+`status` (building/waiting/waiting_route), removed on completion.
+`emergency` exposes `spent` and `cap`; `destroyedClassATiles` records prohibited
+same-siege footprints. Caltrops expose `usesRemaining`/`hitIds` and enemies
+`caltropSlowRemaining`. Properties/journal expose self-defense deployment,
+structure IDs and hired guard IDs. No NPC commands are available in battle.
 Raiders expose `propertyTargetId` and `propertyRaidComplete`; property flow
 fields are cached by target and flow revision. The UI title uses phase `title`;
 the default headless factory still starts in canyon `prep`.
@@ -123,6 +135,10 @@ the default headless factory still starts in canyon `prep`.
 Actions: `selectStage('canyon'|'frontier')`, `startFrontier()`, `returnToTitle()`,
 `openBriefing()` / `dismissBriefing()`, `openJournal()` / `closeJournal()`, and
 `respondToRequest(buildingId, 'promise'|'decline'|'askMore'|'selfDefend')`.
+`guardPosts()` lists named posts; `requestGuards(postId,count)` requests the
+desired total there, gated across all reassigned existing guards. Zero returns
+that post's guards to the keep. `placeEmergency(type,x,y)` and `place()` in a
+Frontier siege create Class B sites; `preview()` provides the same restrictions.
 Stage selection returns a boolean; request responses return `{ok, reason?}`.
 `createGame({stage:'frontier', seed})` constructs the same deterministic stage.
 `retrySiege()` restores the entire pre-siege contract snapshot, including
@@ -198,6 +214,31 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
+Frontier slice 2 integrated `npm test`: **147 passed, 0 failed**, including all
+110 unchanged canyon tests and 37 Frontier tests. `node --check
+src/ui/interface.js` and `node --check src/render/renderer.js` pass; no build
+step exists. No browser suite, controller acceptance or screenshots were run.
+
+New coverage verifies post defense/return and bounties, Communication reassignment,
+bounded wall/gate evacuation, militia retreat, NPC deaths/slam safety, owner
+defense placement/hired guards/access/journal, integer money totals, Class A
+battle refusal, Class B cost/timing/occupancy, enemy clearance and destroyed-A
+footprints, emergency cap/three-site limit, route reservations, no battle editing
+or bounty-funded construction, and caltrops damage/slow/exhaustion. A focused
+deterministic farm-defense contract completes through normal combat and results:
+emergency caltrops reduce assessed orchard loss from **25 G to 2 G**, using the
+same paid defense and raid in both runs. The original authored full-contract
+distributed/town/empty fixtures still satisfy their victory/loss assertions at
+the unchanged 800 G budget.
+
+The first run passed 146/147 with `HARNESS_PRECONDITION_FAILED` in the emergency
+benefit scenario: its raider targeted the orchard and never crossed the site.
+Position/target/damage traces corrected the fixture's tower coverage and hazard
+location; the subsequent integrated run passes. No product assertion was relaxed.
+
+Historical slice-1 verification follows; its old preservation percentages refer
+to the smaller settlement and are not measurements of the enriched map.
+
 Frontier slice 1 integrated `npm test`: **129 passed, 0 failed**, including all
 110 existing canyon tests with unchanged assertions and 19 new Frontier tests.
 The test entry point imports the new suite for Node versions that resolve
@@ -259,10 +300,9 @@ No browser suites, controller acceptance checks or screenshots were run/produced
 UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 
 ## Known Issues / Next Steps
-- Frontier slice 2: NPC defenders, evacuation, guard reassignment, owner
-  self-defense structures and emergency construction. Slice 3: skills
-  advancement, procedural contracts and balance. Communication gates only are
-  present in slice 1; there is no persistent career or procedural map yet.
+- Frontier slice 3: skills
+  advancement, procedural contracts and balance. Communication gates and a Field
+  build-time hook exist; there is no persistent career or procedural map yet.
 - Frontier workshop payment is an immediate conditional advance in owner
   earnings, reconciled at results; a broken promise pays zero in the final
   ledger. No owner payment or bounty can fund construction.

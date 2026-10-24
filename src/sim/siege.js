@@ -10,6 +10,8 @@ import { createInhabitants, stepInhabitants } from './inhabitants.js';
 import { stepGolems } from './golems.js';
 import { resetMechanisms, stepMechanisms } from './mechanisms.js';
 import { stageFor, scheduleFor } from '../data/stages.js';
+import { startFrontierNpcs, stepFrontierNpcs } from './frontier/npcs.js';
+import { startFrontierConstruction, stepFrontierConstruction } from './frontier/construction.js';
 
 export function createSiegeState(state) {
   state.phase = 'siege';
@@ -26,7 +28,8 @@ export function createSiegeState(state) {
   state.keepReached = false;
   state.stats = { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false,
     bountyGold: 0, bountyCounts: { foot: 0, chiseler: 0, powder: 0, boss: 0 } };
-  createInhabitants(state);
+  if(stageFor(state).flags.npcDefenders) {startFrontierConstruction(state);startFrontierNpcs(state);}
+  else createInhabitants(state);
   rebuildFlow(state);
   emit(state, 'siegeStarted', { siegeIndex: state.siegeIndex });
   return state;
@@ -40,7 +43,8 @@ export function stepSiege(state, dt = SIM_DT) {
     const entry = state.schedule[state.spawnIndex++];
     spawnEnemy(state, entry.type, entry.x, entry.y, entry.lane);
   }
-  stepInhabitants(state, dt);
+  if(stageFor(state).flags.npcDefenders) {stepFrontierConstruction(state,dt);stepFrontierNpcs(state,dt);}
+  else stepInhabitants(state, dt);
   stepTowers(state, dt);
   stepPendulum(state, dt);
   stepExplosions(state, dt);

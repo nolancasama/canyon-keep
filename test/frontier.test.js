@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../src/config.js';
+import { FRONTIER_MAP } from '../src/data/frontier/map.js';
 import { createGame } from '../src/sim/campaign.js';
 import { damageStructure } from '../src/sim/grid.js';
 import { spawnEnemy, damageEnemy } from '../src/sim/enemies.js';
@@ -10,7 +11,7 @@ import { FRONTIER_TOWN_BUILD, FRONTIER_PRESERVATION_BUILD, applyFrontierBuild, f
 
 const frontier=()=>createGame({stage:'frontier',seed:123456});
 const properties=game=>game.state.structures.filter(s=>s.owner);
-const round=n=>Math.round((n+Number.EPSILON)*100)/100;
+const round=n=>Math.round(n);
 const results=game=>{game.state.phase='victory';return calculateContractResults(game.state);};
 
 test('default stage and explicit canyon stage retain the same deterministic campaign state',()=>{
@@ -35,7 +36,7 @@ test('Frontier is independently selectable and returning to canyon reconstructs 
 
 test('handcrafted properties have stable ownership, distinct districts and pre-existing damage',()=>{
   const game=frontier(),buildings=properties(game);
-  assert.ok(buildings.length>=10);
+  assert.ok(buildings.length>=21&&buildings.length<=27,'20–26 civilian buildings plus the keep');
   assert.equal(new Set(buildings.map(s=>s.id)).size,buildings.length);
   assert.ok(buildings.some(s=>s.hp>0&&s.hp<s.maxHp),'authored pre-existing damage');
   assert.ok(new Set(buildings.map(s=>s.district)).size>=3);
@@ -47,6 +48,25 @@ test('handcrafted properties have stable ownership, distinct districts and pre-e
     assert.equal(typeof s.ownerRewardOffer,'number');
   }
   assert.deepEqual(game.state,frontier().state,'authored stage is reproducible');
+});
+
+test('enriched Frontier settlement has varied buildings and clear non-overlapping footprints',()=>{
+  const buildings=properties(frontier()),occupied=new Set();
+  assert.equal(buildings.filter(s=>s.type==='warehouse').length,2);
+  assert.ok(buildings.filter(s=>s.type==='shop').length>=4);
+  assert.ok(buildings.some(s=>s.type==='workshop'));
+  assert.ok(buildings.some(s=>s.type==='barn'&&s.value<CONFIG.frontier.property.farm.value&&s.selfDefense?.authored));
+  const hamlet=buildings.filter(s=>s.district==='hamlet');
+  assert.ok(hamlet.filter(s=>s.type!=='farm').length>=3&&hamlet.filter(s=>s.type!=='farm').length<=5);
+  assert.ok(hamlet.some(s=>s.type==='farm'));
+  const fields=buildings.filter(s=>s.type==='farm'&&s.district==='farms');
+  assert.ok(fields.filter(s=>s.x<46).length>=2&&fields.filter(s=>s.x>46).length>=2,'two outlying farm groups');
+  for(const s of buildings) for(let y=s.y;y<s.y+s.h;y++) for(let x=s.x;x<s.x+s.w;x++) {
+    assert.notEqual(FRONTIER_MAP.map[y][x],'#',`${s.id} must stand on accessible terrain`);
+    const tile=`${x},${y}`;
+    assert.ok(!occupied.has(tile),`${s.id} must not overlap another property`);occupied.add(tile);
+  }
+  assert.ok(new Set(FRONTIER_MAP.features.filter(f=>f.kind==='river').map(f=>f.x)).size>=3,'river has bends');
 });
 
 test('all living and destroyed civilian footprints remain untouchable by player tools',()=>{
@@ -166,6 +186,24 @@ test('mayor payment itemizes damage, casualties and objective bonuses without pa
   const budget=state.gold;state.gold=0;
   assert.deepEqual(calculateContractResults(state),report,'unspent budget cannot increase earnings');
   state.gold=budget;
+});
+
+test('contract gold rounds each damage and payment line before summing whole-gold totals',()=>{
+  const game=frontier(),state=game.state;
+  const targets=properties(game).filter(s=>s.type==='house').slice(0,3);
+  assert.equal(targets.length,3,'HARNESS_PRECONDITION_FAILED: three separate house liabilities');
+  for(const s of targets) damageStructure(state,s,7);
+  const report=results(game);
+  for(const line of report.damageByBuilding) {
+    assert.ok(Number.isInteger(line.assessed));assert.ok(Number.isInteger(line.liability));assert.ok(Number.isInteger(line.preserved));
+  }
+  assert.equal(report.liability,report.damageByBuilding.reduce((n,s)=>n+s.liability,0));
+  assert.equal(report.totalValueBefore,report.damageByBuilding.reduce((n,s)=>n+s.assessed,0));
+  assert.equal(report.valuePreserved,report.damageByBuilding.reduce((n,s)=>n+s.preserved,0));
+  assert.equal(report.ownerRewardTotal,report.ownerRewards.reduce((n,r)=>n+r.amount,0));
+  assert.equal(report.thankYouTotal,report.thankYouPayments.reduce((n,r)=>n+r.amount,0));
+  assert.equal(report.finalEarnings,report.mayorPayment+report.ownerRewardTotal+report.thankYouTotal+report.bountyGold);
+  for(const value of [report.propertyDeduction,report.casualtyDeduction,report.deduction,report.mayorPayment,report.finalEarnings]) assert.ok(Number.isInteger(value));
 });
 
 test('liability deductions cap at the base fee, no payment becomes negative, and failure pays no mayor fee or bonuses',()=>{

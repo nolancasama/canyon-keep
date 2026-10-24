@@ -2,21 +2,20 @@ import { CONFIG } from '../../config.js';
 import { FRONTIER_MAP } from '../../data/frontier/map.js';
 import { FRONTIER_SIEGE } from '../../data/frontier/siege.js';
 import { frontierSettlement, frontierRequests } from '../../data/frontier/settlement.js';
-import { createInhabitants } from '../inhabitants.js';
+import { initializeFrontierNpcs } from './npcs.js';
 
-const money=value=>Math.round((value+Number.EPSILON)*100)/100;
+const money=value=>Math.round(value+Number.EPSILON);
+const percentage=value=>Math.round(value*10)/10;
 const surviving=s=>!!s&&!s.destroyed&&s.hp>0;
 
 export function initializeFrontier(state) {
   const rules=CONFIG.frontier;
   state.stageId='frontier';state.gold=rules.budget;state.prepGold=rules.budget;
   state.structures=frontierSettlement();state.inhabitants=[];
-  // Existing civilian movement is reused until slice 2 replaces it with proper
-  // evacuation and defender state machines. Population follows actual homes.
   state.population=state.structures.reduce((n,s)=>n+(CONFIG.structures[s.type].housing??0),0);
-  state.skills={communication:rules.starterCommunication};
+  state.skills={communication:rules.starterCommunication,field:rules.starterField};
   const assessment=state.structures.map(s=>({id:s.id,label:s.label,type:s.type,district:s.district,
-    value:s.value,hpStart:s.hp,maxHp:s.maxHp,assessed:s.value*s.hp/s.maxHp,mandatory:!s.optionalObjective}));
+    value:s.value,hpStart:s.hp,maxHp:s.maxHp,assessed:money(s.value*s.hp/s.maxHp),mandatory:!s.optionalObjective}));
   const requests=frontierRequests(state.structures),journal=[];
   const totalValueAtRisk=money(assessment.reduce((n,s)=>n+s.assessed,0));
   const mayor={...state.structures[0].owner};
@@ -35,11 +34,8 @@ export function initializeFrontier(state) {
   };
   state.journal=journal;
   state.briefing=state.contract.briefing;
-  state.guards=Array.from({length:rules.guards.count},(_,i)=>({id:`guard-${i+1}`,name:`Keep guard ${i+1}`,
-    x:FRONTIER_MAP.keep.x-1+(i%2)*4,y:FRONTIER_MAP.keep.y+Math.floor(i/2)*2,
-    postId:'keep',hp:rules.guards.hp,maxHp:rules.guards.hp,status:'holding',placeholder:true}));
   state.scoutReport={siegeIndex:1,bullets:[...FRONTIER_SIEGE.scoutReport]};
-  createInhabitants(state);
+  initializeFrontierNpcs(state);
   return state;
 }
 
@@ -81,18 +77,15 @@ export function calculateContractResults(state) {
     const hpEnd=surviving(now)?Math.min(before.hpStart,now.hp):0;
     const hpLost=Math.max(0,before.hpStart-hpEnd);
     const liability=before.hpStart>0?before.assessed*hpLost/before.hpStart:0;
-    return {...before,hpEnd,hpLost,destroyed:hpEnd===0,liability:money(liability),
-      preserved:money(before.assessed-liability),damageFraction:before.hpStart>0?hpLost/before.hpStart:0};
+    const roundedLiability=money(liability);
+    return {...before,hpEnd,hpLost,destroyed:hpEnd===0,liability:roundedLiability,
+      preserved:before.assessed-roundedLiability,damageFraction:before.hpStart>0?hpLost/before.hpStart:0};
   });
   const failedObjectives=contract.mandatoryObjectives.filter(goal=>!surviving(state.structures.find(s=>s.id===goal.id)));
   const success=failedObjectives.length===0&&state.phase!=='defeat';
   const totalValueBefore=money(contract.assessment.reduce((n,s)=>n+s.assessed,0));
-  // Round only after summing exact per-building liabilities. Never combine a
-  // partial-damage charge and a destroyed-building charge for the same id.
-  const liability=money(contract.assessment.reduce((n,s)=>{
-    const end=damageByBuilding.find(now=>now.id===s.id);
-    return n+(s.hpStart>0?s.assessed*end.hpLost/s.hpStart:0);
-  },0));
+  // Integer line items are summed, so property/district/contract totals agree.
+  const liability=damageByBuilding.reduce((n,s)=>n+s.liability,0);
   const valuePreserved=money(totalValueBefore-liability),preservation=totalValueBefore?valuePreserved/totalValueBefore*100:100;
   const civilianLosses=state.inhabitants.filter(p=>p.hp<=0).length;
   const propertyDeduction=money(liability*contract.damageLiability),casualtyDeduction=civilianLosses*rules.casualtyPenalty;
@@ -122,7 +115,7 @@ export function calculateContractResults(state) {
   const thankYouTotal=money(thankYouPayments.reduce((n,r)=>n+r.amount,0));
   const bountyGold=state.stats.bountyGold??0;
   const finalEarnings=money(mayorPayment+ownerRewardTotal+thankYouTotal+bountyGold);
-  const reasons=[`${money(preservation)}% of assessed property value preserved`,`${civilianLosses} civilian losses`,
+  const reasons=[`${percentage(preservation)}% of assessed property value preserved`,`${civilianLosses} civilian losses`,
     `${promisesKept} promises kept; ${promisesBroken} broken`,success?'Mandatory keep protected':'Mandatory objective failed',
     workshop?'Workshop objective completed':'Workshop objective lost'];
   if(promisesBroken) reasons.push(`Contract reputation ${-promisesBroken} from broken promises`);
@@ -138,7 +131,7 @@ export function calculateContractResults(state) {
     liability:money(damageByBuilding.filter(b=>b.district===d.id).reduce((n,b)=>n+b.liability,0)),
     destroyed:damageByBuilding.filter(b=>b.district===d.id&&b.destroyed).length}));
   return {stageId:'frontier',result:success?'victory':'defeat',outcome:success?'Contract fulfilled':'Contract failed',
-    totalValueBefore,valuePreserved,preservation:money(preservation),liability,damageByBuilding,damageByDistrict,
+    totalValueBefore,valuePreserved,preservation:percentage(preservation),liability,damageByBuilding,damageByDistrict,
     civilianLosses,inhabitantsLost:civilianLosses,inhabitantsSaved:state.population-civilianLosses,
     promisesKept,promisesBroken,reputation:-promisesBroken,ownerRewards,ownerRewardTotal,thankYouPayments,thankYouTotal,
     baseFee:success?contract.baseFee:0,contractBaseFee:contract.baseFee,propertyDeduction,casualtyDeduction,

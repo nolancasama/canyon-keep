@@ -599,3 +599,54 @@ Deferred / rejected for this pass
 - Slice 1 records self-defense intent and renders already-posted static keep
   guards. NPC AI, guard reassignment, emergency construction, skill advancement
   and procedural generation are deliberately deferred to their named slices.
+
+## 2026-10-24 — Frontier Commission slice 2 implementation decisions
+
+- Frontier stage flags enable autonomous NPCs and emergency construction through
+  stage-only lifecycle hooks. Canyon retains its inhabitants, combat/economy,
+  schedules and tool permissions; its 110 test assertions remain unchanged.
+- Guards, district militia, civilians and enemies pursuing NPCs use bounded,
+  orthogonal friendly/enemy path searches. Gates and the keep pass friendlies;
+  failed routes are cached against goal/position/structure revision and produce
+  explicit shelter/hold states rather than endless blocked movement. Militia
+  retreat is latched below 30% HP. Frontier explosions and brute slams can kill
+  exposed defenders/civilians; shelter protects evacuated civilians.
+- Guard requests specify the desired total at a named post. Limits apply across
+  all guards moved from the keep (Comm 2: two; Comm 3+: four), and requesting
+  zero recalls that post. These are the same four professional guards, with
+  changed positions/counts; owner-hired guards are separate and cannot be
+  reassigned. There are no battle orders.
+- Owner defenses deploy after the exact retry snapshot, before evacuation.
+  Stable perimeter order picks free adjacent cells, preserves trade access and
+  every property's last access, and skips unsafe pieces. They cost zero and
+  carry `npcOwned`/owner-building metadata. Merchant self-defense hires a guard;
+  the authored stubborn barn owner deploys palisades. Journal entries record
+  deployed/skipped state and concrete piece/guard IDs.
+- Class B battle placement reserves budget and cap gold immediately. Sites
+  remain outside structure occupancy until their timer and live-unit clearance
+  permit completion. Route checks count all reserved blocking footprints to
+  prevent simultaneous sites closing the final enemy route; completion rechecks
+  route safety after intervening changes. Destroyed Class A footprints,
+  including awakened golem walls, remain prohibited for that siege. Timers,
+  waiting states, spent/cap gold and destroyed footprints are exposed as plain
+  semantic state. Starter Field 1 has no reduction; the frozen Field reduction
+  hook is present without progression UI.
+- Palisades are 12 G/100 HP (barricades stay 8 G/70 HP). Walkable caltrops cost
+  10 G, hit each entering enemy once for 4 damage and a two-second 50% slow,
+  then expire after ten uses. Emergency supply spending is capped at 120 G per
+  siege, with three sites and a two-second base timer. All tuning is in CONFIG.
+- Whole-gold accounting supersedes slice 1's cents. Assessments and each
+  building liability round first; district/contract totals sum those integers.
+  Payment line items also round before summation. Preservation percentages keep
+  one decimal, and displayed monetary lines reconcile exactly with totals.
+- The handcrafted settlement now has 24 civilian buildings plus the keep:
+  eleven houses, four shops, two warehouses, workshop, five farms and barn.
+  Bending river banks and branched roads retain the central ford. Distinct type
+  sprites make protection choices readable. The existing 800 G budget and
+  public-action defense fixtures still demonstrate distributed protection,
+  exposed-district losses and empty-defense defeat, so no canyon or Frontier
+  siege balance was changed in this slice.
+- The title uses a full-width centered pair of cards and hides game HUD/build
+  controls. Frontier battle presentation adds live objective/property/civilian/
+  promise/supply observations and visible site progress/waits. Controller/Claude
+  owns visual judgment; no browser acceptance or screenshot run was performed.

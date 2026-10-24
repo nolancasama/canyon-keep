@@ -3,6 +3,7 @@ import { structureAt, blockingAt, blocksStructure, isWalkable, emit, damageStruc
 import { nextStep } from './pathing.js';
 import { queueExplosion } from './explosions.js';
 import { stageFor, siegeFor } from '../data/stages.js';
+import { engageFrontierNpc } from './frontier/npcs.js';
 
 export const isAlive = enemy => enemy.hp > 0;
 
@@ -83,6 +84,11 @@ function slam(state,enemy,target) {
   const y=Math.max(target.y,Math.min(enemy.y,target.y+target.h));
   for(const s of [...state.structures]) if(s.hp>0 && !s.destroyed && distanceToStructure({x,y},s)<=spec.slamRadius) damageStructure(state,s,spec.slamDamage);
   for(const other of state.enemies) if(other.id!==enemy.id && other.hp>0 && Math.hypot(other.x-x,other.y-y)<=spec.slamRadius) damageEnemy(state,other,spec.slamDamage);
+  if(state.stageId==='frontier') for(const unit of [...state.guards,...state.militia,...state.inhabitants]) {
+    if(unit.hp<=0||unit.sheltered||Math.hypot(unit.x-x,unit.y-y)>spec.slamRadius) continue;
+    unit.hp=Math.max(0,unit.hp-spec.slamDamage);
+    if(unit.hp<=0) {unit.status='dead';emit(state,'npcDeath',{id:unit.id,npcType:unit.type??'civilian',x:unit.x,y:unit.y});}
+  }
   enemy.attackPhase='slamming';
   enemy.slamCooldown=CONFIG.combat.bossSlamCooldown;
   emit(state,'bossSlam',{id:enemy.id,x,y,radius:spec.slamRadius});
@@ -139,9 +145,11 @@ export function stepEnemies(state,dt) {
     if(enemy.hp<=0) continue;
     enemy.stunRemaining=Math.max(0,(enemy.stunRemaining||0)-dt);
     enemy.slowRemaining=Math.max(0,(enemy.slowRemaining||0)-dt);
+    if(state.stageId==='frontier') enemy.caltropSlowRemaining=Math.max(0,(enemy.caltropSlowRemaining||0)-dt);
     enemy.slamCooldown=Math.max(0,(enemy.slamCooldown||0)-dt);
     if(enemy.stunRemaining>0) {enemy.attackPhase='stunned';continue;}
-    const speed=CONFIG.enemies[enemy.type].speed*(enemy.slowRemaining>0?CONFIG.pendulum.slowFactor:1);
+    const speed=CONFIG.enemies[enemy.type].speed*(enemy.slowRemaining>0?CONFIG.pendulum.slowFactor:1)*
+      (state.stageId==='frontier'&&enemy.caltropSlowRemaining>0?CONFIG.frontier.caltrops.slowFactor:1);
     const keepOnly=stageFor(state).flags.contractPayment&&enemy.type==='boss';
     const golem=!keepOnly&&(state.golems??[]).find(unit=>unit.status==='active' && Math.hypot(unit.x-enemy.x,unit.y-enemy.y)<=CONFIG.golem.chaseRadius && canReachGolem(state,enemy,unit));
     if(golem) {
@@ -151,7 +159,8 @@ export function stepEnemies(state,dt) {
       } else {enemy.attackPhase='moving';moveToward(state,enemy,golem.x,golem.y,speed*dt);}
       continue;
     }
-    const inhabitant=!keepOnly&&state.inhabitants.find(person=>person.hp>0 && !person.sheltered && Math.hypot(person.x-enemy.x,person.y-enemy.y)<=CONFIG.inhabitants.chaseRadius);
+    if(state.stageId==='frontier'&&engageFrontierNpc(state,enemy,speed,dt)) continue;
+    const inhabitant=state.stageId!=='frontier'&&!keepOnly&&state.inhabitants.find(person=>person.hp>0 && !person.sheltered && Math.hypot(person.x-enemy.x,person.y-enemy.y)<=CONFIG.inhabitants.chaseRadius);
     if(inhabitant) {
       if(!attackInhabitant(state,enemy,inhabitant,dt)) {
         enemy.attackPhase='moving';moveToward(state,enemy,inhabitant.x,inhabitant.y,speed*dt);

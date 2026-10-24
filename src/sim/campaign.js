@@ -9,6 +9,8 @@ import { rateDefense, growSettlement } from './settlement.js';
 import * as mechanisms from './mechanisms.js';
 import { STAGES, stageFor, siegeFor } from '../data/stages.js';
 import { initializeFrontier, respondToRequest, finalizeContract } from './frontier/contract.js';
+import { requestGuards, guardPosts } from './frontier/npcs.js';
+import { startFrontierConstruction, placeEmergency } from './frontier/construction.js';
 
 export function calculateResults(state) {
   const rules=CONFIG.rewards, before=state.snapshot;
@@ -71,7 +73,7 @@ export function createGame(seed = CONFIG.seed) {
   seed=options.seed??(typeof seed==='number'?seed:CONFIG.seed);
   const makeState = stageId => {
     const next=createCampaignState(seed);
-    if(stageId==='frontier') initializeFrontier(next);
+    if(stageId==='frontier') {initializeFrontier(next);startFrontierConstruction(next);}
     return next;
   };
   let state = makeState(options.stage??'canyon');
@@ -90,6 +92,9 @@ export function createGame(seed = CONFIG.seed) {
     startFrontier() { return api.selectStage('frontier'); },
     returnToTitle() { state=makeState('canyon');state.phase='title';return true; },
     respondToRequest: (id,choice) => respondToRequest(state,id,choice),
+    requestGuards: (postId,count) => requestGuards(state,postId,count),
+    guardPosts: () => state.stageId==='frontier'?guardPosts(state):[],
+    placeEmergency: (type,x,y) => placeEmergency(state,type,x,y),
     openBriefing() {
       if(!state.contract) return false;
       state.contract.briefingOpen=true;state.briefing=state.contract.briefing;return true;

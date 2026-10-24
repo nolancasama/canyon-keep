@@ -3,6 +3,7 @@ import { WIDTH } from '../data/map.js';
 import { tileAt, structureAt, isWalkable, emit, blocksStructure } from './grid.js';
 import { initializeMechanism, pruneLinks } from './mechanisms.js';
 import { stageFor } from '../data/stages.js';
+import { emergencyPlacement, placeEmergency } from './frontier/construction.js';
 
 const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const failure = (reason, cost = 0) => ({ valid: false, ok: false, reason, cost });
@@ -73,6 +74,7 @@ export function refundValue(structure) {
 }
 
 export function placement(state, type, x, y, { line = false } = {}) {
+  if(state.stageId==='frontier'&&state.phase==='siege') return emergencyPlacement(state,type,x,y);
   if (CONFIG.structures[type] && !stageFor(state).allowedTools.includes(type) && !['keep','house','farm'].includes(type)) return failure(stageFor(state).id==='canyon'?'Select a construction tool':'This contract does not provide that tool');
   if (['keep', 'house', 'farm'].includes(type)) return failure(clientReason);
   const def = CONFIG.structures[type];
@@ -113,6 +115,7 @@ export function placement(state, type, x, y, { line = false } = {}) {
 }
 
 export function place(state, type, x, y, options) {
+  if(state.stageId==='frontier'&&state.phase==='siege') return placeEmergency(state,type,x,y);
   const check = placement(state, type, x, y, options);
   if (!check.valid) return check;
   if (check.skipped) return check;
@@ -153,7 +156,7 @@ export function lineTiles(x0, y0, x1, y1) {
 export function previewLine(state, type, x0, y0, x1, y1) {
   const scratch = { ...state, structures: state.structures.map(s => ({ ...s, ...(s.links ? { links: [...s.links] } : {}) })),
     inhabitants: state.inhabitants?.map(p => ({ ...p })),
-    rubble: [...(state.rubble ?? [])], events: [], eventLog: [] };
+    rubble: [...(state.rubble ?? [])], ...(state.constructionSites?{constructionSites:state.constructionSites.map(s=>({...s})),emergency:{...state.emergency}}:{}), events: [], eventLog: [] };
   let outOfGold = false;
   const tiles = lineTiles(x0, y0, x1, y1).map(({ x, y }) => {
     if (outOfGold) return { x, y, ...failure('Not enough gold') };

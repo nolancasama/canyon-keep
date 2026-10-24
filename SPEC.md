@@ -453,7 +453,7 @@ duplicate rewards, determinism (two runs of S1 with same build → identical
 event-log hash), headless full S1 run with a reasonable reference build ends in
 victory and with no build ends in defeat.
 
-## 13. The Frontier Commission — slice 1 (Milestones A + B)
+## 13. The Frontier Commission — slices 1–2 (Milestones A–D)
 
 The title offers **Canyon Keep Campaign** and **The Frontier Commission**.
 Sections 2–12 continue to specify the canyon campaign, including its original
@@ -467,16 +467,18 @@ Class A defenses, mechanisms, combat, pause/speed controls and kill bounties.
 `src/data/stages.js` supplies each stage's map, settlement, siege schedule,
 reward model, tools and feature flags. Frontier implementation/data live under
 `src/sim/frontier/` and `src/data/frontier/`. Stage-aware terrain queries retain
-the canyon map as their default. Frontier has no growth or pendulum mount and
-all player construction remains preparation-only in this slice.
+the canyon map as their default. Frontier has no growth or pendulum mount.
+Its makeshift Class B tools can also be built during a siege under the rules below.
 
 Frontier is a 64×36 plain with an east approach, river crossings, rocks, roads,
 a keep, clustered town, outskirts farms and a separated hamlet. Owned buildings
 are pre-existing and protected from placement, replacement, demolition and repair,
 including destroyed footprints. Each has a stable ID, type, owner, HP, value,
 district, importance, objective flag, offered reward and promise state. One
-building starts damaged. Keep guards are visibly assigned static placeholders;
-NPC movement/combat and owner self-defense construction belong to slice 2.
+building starts damaged. The handcrafted settlement has 24 civilian buildings
+plus its keep: houses, market shops, two warehouses, a workshop, two outskirts
+farm groups, a remote hamlet with its own fields, and a low-value barn.
+Roads branch and the impassable river bends around a broad central ford.
 
 A dismissible/reopenable mayor briefing states the construction budget, threats,
 mandatory keep objective, assessed property at risk, fee, bonuses and damage
@@ -488,7 +490,7 @@ choices, locations, rewards and survival conditions. Workshop funds are a
 conditional immediate owner advance recorded separately from construction money;
 final settlement reconciles it with the survival condition. There is no career
 economy. Declines have no penalty; broken promises lose their reward and one
-contract-local reputation point. Self-defense choices record intent only.
+contract-local reputation point. Self-defense choices deploy at Start Siege.
 
 Frontier foot raiders select a nearby valuable property through the stage's
 targeting rule, lock onto it until destroyed, then resume toward the keep.
@@ -502,7 +504,9 @@ Construction gold is the client's budget; unused funds are never earnings.
 Bounties are separate earnings and cannot refill it. At acceptance each property
 records `assessed = value × hpStart/maxHp`. Its single liability entry is
 `assessed × (hpStart − hpEnd)/hpStart`, capped at full assessed value on
-destruction. Pre-existing damage is excluded. Mayor deductions itemize liability
+destruction. Each assessment, damage line and payment line rounds deterministically
+to whole gold before totals are summed; percentages use one decimal. Pre-existing
+damage is excluded. Mayor deductions itemize liability
 times `damageLiability` and civilian penalties, capped at the base fee; mayor
 payment is nonnegative. Failure pays no base fee or mayor bonuses, but surviving
 promised property owners still pay and earned bounties remain.
@@ -517,8 +521,46 @@ Victory or Contract Failed; kills do not influence it. Results finalize once
 and expose a paid flag. Retry restores the exact pre-siege snapshot, including
 budget, requests and owner ledger. Inspection retains damaged/destroyed property.
 
-Slice 2 adds NPC defenders, evacuation, guard reassignment, owner self-defense
-and emergency construction. Slice 3 adds skill advancement, procedural contracts
-and balance. This slice does not add those systems; stage flags and plain-data
-contract state reserve their integration points. The controller-frozen
-2026-10-24 design entry remains authoritative for those later milestones.
+Professional guards hold their assigned post, engage nearby reachable enemies
+within a leash and return. Weaker district militia retreat to the keep below
+30% HP. Civilians idle near homes in prep and evacuate at siege start.
+All use deterministic orthogonal paths: terrain, buildings, walls and barricades
+block; gates pass friendlies. A failed route produces an explicit holding or
+sheltering-in-place state until the map changes. Enemies can kill NPCs and
+civilian deaths feed the casualty deduction. Defender kills pay normal bounties.
+
+The prep mayor panel requests existing guards for named district/property posts.
+Communication 2 allows up to two reassigned guards in total; Communication 3
+allows four. Requesting zero returns that post's guards to the keep. Keep guard
+counts and positions change; battle has no NPC commands. Owner self-defense
+deploys free adjacent timber barricades/palisades or a hired guard according to
+the owner's rule, including the stubborn barn owner. It never overwrites player
+works, closes the trade route or removes a property's last access. Unsafe pieces
+skip deterministically; the journal records deployment and hired guards.
+
+Class A (wall, gate, tower, spiked, golem, launcher, sensor, retractable,
+pendulum) remains prep only. Class B (barricade, palisade, caltrops) works in
+Frontier prep and battle. Palisades cost 12 G with 100 HP versus the existing
+8 G/70 HP barricade. Caltrops cost 10 G, remain walkable, damage an entering
+enemy by 4 and slow it to 50% speed for 2 seconds, expiring after ten uses.
+All tuning lives in CONFIG; canyon retains its original tools and rules.
+
+Emergency construction spends remaining client gold at normal price, with a
+120 G per-siege cap and at most three simultaneous sites. Each non-blocking site
+takes 2 seconds at starter Field 1 (hook: −0.3 seconds per additional Field
+level). A finished timer waits while a living enemy/NPC/golem occupies its
+footprint. Blocking sites also preserve an enemy route to the keep, counting
+reserved blocking sites. Placement refuses living enemies within one tile,
+overlap, protected property, and tiles of Class A works destroyed in this siege.
+Battle permits no demolition, repairs or refunds; bounties never refill client
+gold or the emergency allowance. Canyon has no battle construction.
+
+The Frontier battle HUD shows mandatory objective HP, estimated value preserved,
+living civilians, active promises with current survival status, emergency
+supplies spent/cap, machine controls, pause and speed. Sites show a progress ring
+and waiting state. Disabled Class A entries explain their prep-only restriction.
+The centered title has two labelled cards, descriptions and Play buttons, with
+construction/HUD/key hints hidden.
+
+Slice 3 adds skills progression, procedural contracts and balance. The
+controller-frozen 2026-10-24 design entry remains authoritative.

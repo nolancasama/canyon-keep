@@ -35,6 +35,12 @@ export function damageStructure(state, structure, damage) {
   if (!structure || structure.destroyed || structure.hp <= 0) return false;
   if (CONFIG.structures[structure.type]?.invulnerable || !blocksStructure(structure)) return false;
   structure.hp = Math.max(0, structure.hp - damage);
+  if(state.stageId==='frontier'&&state.phase==='siege'&&
+    (structure.hp<=0||(structure.type==='golem'&&structure.hp<=structure.maxHp*CONFIG.golem.awakenFraction))&&
+    ['wall','gate','tower','spiked','golem','launcher','sensor','retractable','pendulum'].includes(structure.type)) {
+    for(let y=structure.y;y<structure.y+structure.h;y++) for(let x=structure.x;x<structure.x+structure.w;x++)
+      (state.destroyedClassATiles??=[]).push({x,y});
+  }
   if (state.phase === 'siege' && structure.type === 'golem' && structure.hp <= structure.maxHp * CONFIG.golem.awakenFraction) {
     const x = structure.x + .5, y = structure.y + .5;
     structure.awakened = true;

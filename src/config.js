@@ -31,6 +31,8 @@ export const CONFIG = {
     launcher: { cost: 70, hp: 200, w: 1, h: 1, family: 'wall', supportsTower: true, military: true, device: true },
     retractable: { cost: 45, hp: 200, w: 1, h: 1, family: 'wall', supportsTower: false, military: true, device: true, retracts: true },
     barricade: { cost: 8, hp: 70, w: 1, h: 1, military: true, line: true },
+    palisade: { cost: 12, hp: 100, w: 1, h: 1, military: true, line: true },
+    caltrops: { cost: 10, hp: 1, w: 1, h: 1, blocks: false, invulnerable: true, military: true },
     tower: { cost: 120, hp: 250, w: 1, h: 1, military: true },
     house: { cost: 80, hp: 120, w: 2, h: 2, housing: 4 },
     farm: { cost: 70, hp: 100, w: 2, h: 2, food: 6 },
@@ -67,13 +69,20 @@ export const CONFIG = {
     budget: 800, baseFee: 600, damageLiability: 0.5, casualtyPenalty: 25,
     thankYouThreshold: 150, thankYouRate: 0.05, thankYouCap: 80,
     negotiationMultiplier: 1.5, starterCommunication: 2, propertySightRadius: 7,
-    guards: { count: 4, hp: 100 },
+    guards: { count: 4, hp: 100, speed: 2, damage: 10, interval: 1, engageRadius: 4, leashRadius: 5 },
+    militia: { hp: 55, speed: 1.7, damage: 5, interval: 1.2, engageRadius: 3, leashRadius: 4,
+      retreatFraction: 0.3, countPerDistrict: 1 },
+    ownerDefense: { pieces: 2 }, guardRequestLimits: { 2: 2, 3: 4 },
+    emergencyCap: 120, maxConstructionSites: 3, buildTime: 2, fieldBuildReduction: 0.3,
+    starterField: 1, enemyBuildClearance: 1,
+    caltrops: { uses: 10, damage: 4, slowFactor: 0.5, slowDuration: 2 },
     bonuses: { allCivilians: 80, workshop: 60 },
     rating: { exceptional: 95, strong: 80, acceptable: 60, strongCasualties: 1 },
     property: {
       keep: { value: 1000 }, house: { value: 140 }, shop: { value: 240, hp: 140 },
       warehouse: { value: 400, hp: 200 }, workshop: { value: 300, hp: 180, initialHp: 108 },
       farm: { value: 180 }, hamlet: { value: 160 },
+      barn: { value: 70, hp: 80 },
     },
     requests: {
       merchant: { reward: 120, communication: 2 }, farmer: { reward: 80, communication: 3 },
@@ -94,6 +103,6 @@ export const CONFIG = {
 };
 
 // Frontier properties are client-owned. Canyon never creates these types.
-for (const type of ['shop', 'warehouse', 'workshop']) CONFIG.structures[type] = {
+for (const type of ['shop', 'warehouse', 'workshop', 'barn']) CONFIG.structures[type] = {
   cost: 0, hp: CONFIG.frontier.property[type].hp, w: 2, h: 2, civilian: true,
 };
