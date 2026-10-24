@@ -1,5 +1,51 @@
 # Design Decisions
 
+## 2026-10-24 — Geometry budgets and purchased advanced scouting
+
+- Replace generated value/raider-based 600–950 G budgets with estimated basic
+  enclosure costs. Dilate core building footprints by two Manhattan tiles,
+  count their cardinal exterior ring, omit interior holes and remote outliers
+  beyond 14 tiles of the keep/central lot. This matches the simulation's
+  cardinal movement and follows irregular lots rather than pricing a bounding
+  rectangle. Clip clearance near other civilian lots so a proposed curtain
+  can be built. Natural barriers cost zero; roads use gates; existing walls
+  are already built. No map rejection or siege generation changes are needed.
+- Configured weights: Compact main 1.0, remote property 0, equipment +35%;
+  Twin larger 1.0 + smaller 0.5, equipment +25%; Outpost main 1.0 + outpost 0.6,
+  equipment +25%. Round to 10 G, with 1000–6000 G safeguards. The intent is a
+  credible main enclosure and military equipment, with satellite protection
+  requiring choices. Handcrafted treasury uses its main-town estimate plus
+  equipment: 1950 G available versus 1560 G main-town and 4200 G combined
+  estimates. Its map, siege and owner systems remain unchanged. Canyon's
+  original 1000 G starting treasury and all combat values remain unchanged.
+- Estimates are advisory and stored on the contract. Prep lists remaining
+  gold, named basic enclosure costs and their combined total, with explicit
+  exclusions for towers, machinery and terrain adjustments. No ring is drawn,
+  built or enforced. Padding and multiple road crossings can cost more than
+  older unpadded rectangular comparison fixtures, especially for disconnected
+  farming lobes; estimates do not claim globally cheapest construction.
+- Advanced scouting costs 50 G once per generated contract in prep. Report
+  actual assigned groups with the same strength weights as generation, rounded
+  to 5%; name genuine dangerous types, minor diversions, primary direction
+  and second-wave direction without spawn times. Retain the entire free report.
+  Paid prep markers remain at the edge, emphasizing the primary front and
+  subduing secondary/diversion fronts. The handcrafted siege/fallback has no
+  front plan; disable purchase with a clear explanation instead of inventing
+  equivalent intelligence.
+- Scouting is a non-refundable service, separate from structure paid costs,
+  demolition and repair. Store its flag on the contract; normal JSON saves and
+  the existing full pre-siege snapshot preserve both intel and spent money.
+  Retry charges nothing and refunds nothing. Purchases never edit enemy groups,
+  front plans, schedules, strengths or spawn timing.
+- Rejected: fixed budget ranges as the funding model, bounding-box perimeters,
+  fabricated intel, exact spawn-time disclosure and construction-enforced
+  enclosure recommendations.
+- Legacy seed-1 tactical comparisons retain their original six/seven tower
+  spend through an explicit test-helper limit, keeping their equal-cost intel
+  assertions meaningful at the larger treasury. Replace the old map-edge
+  `> 3 × budget` check (an artifact of the old range) with `> budget`.
+  New full-budget sweep strategies cover the larger treasury separately.
+
 ## 2026-10-24 — Ordinary wall-to-tower replacement
 
 - The Tower tool replaces only living player-owned ordinary walls during

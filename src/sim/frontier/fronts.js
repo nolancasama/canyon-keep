@@ -93,6 +93,52 @@ export function frontScoutReport(plan,groups,districts) {
   return bullets;
 }
 
+// Paid reconnaissance reads the assigned groups, never the intended shares.
+// Strength uses the same weights as front assignment; rounded shares are advisory.
+export function advancedScoutReport(plan,groups,districts) {
+  if(!plan?.fronts?.length) return [];
+  const dir=f=>FRONT_DIRECTIONS[f.direction].name,strength=g=>g.count*CONFIG.frontier.fronts.strength[g.type];
+  const total=groups.reduce((n,g)=>n+strength(g),0);
+  const opening=plan.fronts.filter(f=>f.waveShares[0]>0);
+  const main=opening.reduce((a,b)=>b.waveShares[0]>a.waveShares[0]?b:a);
+  const bullets=[`Primary attack direction: ${dir(main)}.`];
+  const dangers=[['powder','powder carriers'],['chiseler','chiselers'],['boss','the giant brute']];
+  for(const front of plan.fronts) {
+    const assigned=groups.filter(g=>g.front===front.id&&g.count>0),share=assigned.reduce((n,g)=>n+strength(g),0);
+    const dangerous=dangers.filter(([type])=>assigned.some(g=>g.type===type)).map(([,label])=>label);
+    bullets.push(`${dir(front)[0].toUpperCase()+dir(front).slice(1)}: about ${total?Math.round(share/total*20)*5:0}% of enemy strength${front.band==='minor'?' (diversion)':''}${dangerous.length?`; ${names(dangerous)}`:''}.`);
+  }
+  if(plan.waves===2) {
+    const shift=plan.fronts.reduce((a,b)=>b.waveShares[1]>a.waveShares[1]?b:a);
+    bullets.push(`Second-wave main assault: ${dir(shift)}.`);
+  }
+  return bullets;
+}
+
+export function advancedScoutingStatus(state) {
+  const cost=CONFIG.frontier.scouting.advancedCost;
+  if(state.stageId!=='frontier'||state.phase!=='prep') return {ok:false,cost,reason:'Frontier preparation only'};
+  if(!siegeFor(state)?.plan) return {ok:false,cost,unavailable:true,reason:'Advanced scouting is unavailable for this authored siege; use the free report'};
+  if(state.contract.advancedScouting) return {ok:false,cost,reason:'Advanced scouting already purchased'};
+  if(state.gold<cost) return {ok:false,cost,reason:`Need ${cost} G for advanced scouting`};
+  return {ok:true,cost};
+}
+
+export function scoutingReport(state) {
+  const siege=siegeFor(state),report={siegeIndex:state.siegeIndex,bullets:[...siege.scoutReport]};
+  if(state.contract?.advancedScouting&&siege.plan) report.advancedBullets=advancedScoutReport(siege.plan,siege.groups,state.frontierMap?.districts??[]);
+  return report;
+}
+
+export function purchaseAdvancedScouting(state) {
+  const check=advancedScoutingStatus(state);
+  if(!check.ok) return check;
+  state.gold-=check.cost;
+  state.contract.advancedScouting=true;
+  state.scoutReport=scoutingReport(state);
+  return check;
+}
+
 // Edge warnings precede the first entry from each front by a fixed lead.
 export function stepFrontWarnings(state) {
   const plan=siegeFor(state)?.plan;

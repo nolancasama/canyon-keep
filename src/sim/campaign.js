@@ -7,11 +7,12 @@ import { triggerPendulum } from './pendulum.js';
 import { createInhabitants } from './inhabitants.js';
 import { rateDefense, growSettlement } from './settlement.js';
 import * as mechanisms from './mechanisms.js';
-import { STAGES, stageFor, siegeFor } from '../data/stages.js';
+import { STAGES, stageFor } from '../data/stages.js';
 import { initializeFrontier, respondToRequest, finalizeContract } from './frontier/contract.js';
 import { requestGuards, guardPosts } from './frontier/npcs.js';
 import { startFrontierConstruction, placeEmergency } from './frontier/construction.js';
 import { frontierSeed } from './frontier/generator.js';
+import { advancedScoutingStatus, purchaseAdvancedScouting, scoutingReport } from './frontier/fronts.js';
 
 export function calculateResults(state) {
   const rules=CONFIG.rewards, before=state.snapshot;
@@ -98,6 +99,8 @@ export function createGame(seed = CONFIG.seed) {
     respondToRequest: (id,choice) => respondToRequest(state,id,choice),
     requestGuards: (postId,count) => requestGuards(state,postId,count),
     guardPosts: () => state.stageId==='frontier'?guardPosts(state):[],
+    advancedScoutingStatus: () => advancedScoutingStatus(state),
+    purchaseAdvancedScouting: () => purchaseAdvancedScouting(state),
     placeEmergency: (type,x,y) => placeEmergency(state,type,x,y),
     openBriefing() {
       if(!state.contract) return false;
@@ -155,7 +158,7 @@ export function createGame(seed = CONFIG.seed) {
     },
     openScoutReport() {
       if(state.phase!=='prep') return false;
-      state.scoutReport={siegeIndex:state.siegeIndex,bullets:[...siegeFor(state).scoutReport]};
+      state.scoutReport=scoutingReport(state);
       return true;
     },
     dismissScoutReport() {

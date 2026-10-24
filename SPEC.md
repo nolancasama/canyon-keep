@@ -629,14 +629,59 @@ Prep shows an inward arrow per front sized and labelled MAJOR (≥50%),
 SECONDARY (20–49%) or POSSIBLE RAID (<20%), dashed "2ND WAVE?" for wave-2-only
 fronts, with tinted entry tiles. The scout report names every front with banded
 strength, the second-wave shift and rounded raider totals; no exact counts or
-times. In battle arrows dim; each front pulses "INCOMING" 5 s before its first
+times. The free report retains this content. Generated commissions offer
+**Purchase Advanced Scouting — 50 G**, once in Frontier preparation. It uses
+the actual assigned group counts and configured enemy strength weights to
+estimate each front's share to the nearest 5%, identifies the primary opening
+direction, minor-band diversions, powder carriers/chiselers/the giant brute
+only on fronts carrying them, and the second-wave main direction. It never
+reveals exact arrival times or changes the siege. The purchase is separate from
+construction accounting and non-refundable; the contract flag and spent gold
+survive saved state and pre-siege retry without a second charge. Insufficient
+funds, repeat purchase and other phases refuse without mutation. The authored
+siege and generated fallback lack a front plan, so purchase is disabled with
+an explanation and the free report remains available. After purchase, prep
+edge markers distinguish the primary front from smaller, subdued secondary
+and diversion markers; settlement interiors remain clear.
+In battle arrows dim; each front pulses "INCOMING" 5 s before its first
 entry (`frontWarning` event, `state.frontWarnings`). The handcrafted contract
 keeps its single eastern schedule and label.
 
 Seeds vary terrain, roads, property/population, keep positions, guard counts,
-siege plans and entries, owner names/requests and special objectives. Budget scales
-with acceptance value; a separate complete curtain for every district is
-unaffordable. Named-building survival and preservation of at least 80% of
+siege plans and entries, owner names/requests and special objectives.
+Construction budgets come from deterministic settlement geometry, independent
+of assessed value and raider counts. A pure enclosure estimator selects core
+building footprints within a configured distance of the keep (or central lot
+for settlements without a keep), excluding distant outliers, dilates them by
+two tiles and counts the exterior ring. It follows the footprint, never its
+bounding rectangle. Impassable terrain is a free natural barrier; road ring
+tiles require gates, other buildable tiles walls, and existing defensive walls
+are already paid. Interior holes need no curtain. Neighboring client lots
+constrain clearance to keep the proposed ring buildable. Estimates expose wall,
+gate, natural and existing counts, their base-price cost, and ring tiles.
+
+Generated budget = round-to-10(weighted enclosure cost × (1 + equipment
+allowance)), with configurable safeguard bounds. Compact Town funds its main
+enclosure plus 35% for equipment; remote property has zero weight. Twin
+Settlements weights the larger enclosure at 1.0 and smaller at 0.5, plus 25%.
+Town + Outpost weights main at 1.0 and outpost at 0.6, plus 25%. These allow
+impressive main defenses and partial satellite protection, while both full
+curtains plus equipment still require compromise. The handcrafted budget is
+configured using the same estimator: main enclosure and equipment are realistic,
+enclosing all farms and the hamlet exceeds its treasury. The handcrafted
+budget is 1950 G against a 1560 G main curtain and 4200 G combined estimates.
+Canyon's budget,
+layout and balance remain unchanged.
+
+Every contract stores its budget plan, named principal settlement estimates,
+combined enclosure cost and available budget. Frontier preparation shows a
+compact **FRONTIER DEFENSE BUDGET** block: current available gold, each principal
+enclosure estimate and the combined total for multiple settlements. A caveat
+states that only basic walls and gates are covered, excluding towers,
+machinery and terrain adjustments. This is advisory: it draws no curtain and
+imposes no construction or readiness rule.
+
+Named-building survival and preservation of at least 80% of
 farm buildings have explicit mandatory/optional labels, locations and
 reward/penalty amounts. Mandatory special failure fails the contract;
 optional failure affects the itemized payment and rating.

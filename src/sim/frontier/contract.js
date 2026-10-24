@@ -5,6 +5,7 @@ import { frontierSettlement, frontierRequests } from '../../data/frontier/settle
 import { initializeFrontierNpcs } from './npcs.js';
 import { generateFrontierContract, frontierSeed } from './generator.js';
 import { normalizeSkills } from './skills.js';
+import { frontierBudgetPlan } from './budget.js';
 
 const money=value=>Math.round(value+Number.EPSILON);
 const percentage=value=>Math.round(value*10)/10;
@@ -30,6 +31,7 @@ export function initializeFrontier(state,options={}) {
   const seed=generated?.seed??frontierSeed(options.seed??state.rng.seed);
   state.contract={id:generated?`frontier-${seed}-${generated.archetype}`:'eastbank-commission',seed,archetype:generated?.archetype??'handcrafted',
     generated:!!generated,generation:generated?.generation??{attempts:0,fallback:false},mayor,budget,baseFee:rules.baseFee,
+    budgetPlan:generated?.budgetPlan??frontierBudgetPlan(map,state.structures,'handcrafted',budget),
     damageLiability:rules.damageLiability,assessment,requests,journal,briefingOpen:true,
     reputation:0,paid:false,earnings:0,ownerAdvances:0,
     mandatoryObjectives,specialObjectives,

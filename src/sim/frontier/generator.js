@@ -6,6 +6,7 @@ import { frontierSettlement, frontierRequests } from '../../data/frontier/settle
 import { FRONTIER_ARCHETYPES, TERRAIN_TEMPLATES, TWIN_AXES, OWNER_NAMES, REQUEST_TEMPLATES, SPECIAL_BUILDING_NAMES } from '../../data/frontier/templates.js';
 import { createRng, random } from '../rng.js';
 import { FRONT_DIRECTIONS, edgeAnchor, chooseFrontPlan, assignFronts, frontScoutReport } from './fronts.js';
+import { frontierBudgetPlan } from './budget.js';
 
 const directions=[[1,0],[0,1],[-1,0],[0,-1]],key=(x,y)=>y*WIDTH+x;
 const copy=value=>structuredClone(value);
@@ -227,12 +228,13 @@ function makeCandidate(seed,archetype,attempt) {
   objective.mandatory=random(rng)<.25;objective.reward=rules.specialReward;objective.penalty=rules.specialPenalty;
   const groups=copy(CONFIG.frontier.siege.groups);
   for(const g of groups) if(g.type==='foot') g.count=integer(...rules.footCount);
-  const footCount=groups.filter(g=>g.type==='foot').reduce((n,g)=>n+g.count,0),schedule=assignFronts(groups,plan);
+  const schedule=assignFronts(groups,plan);
   const siege={name:`The ${template.name} Raid`,bossHp:CONFIG.frontier.siege.bossHp,groups:schedule,plan,
     scoutReport:frontScoutReport(plan,groups,districts)};
-  const assessed=structures.reduce((n,s)=>n+Math.round(s.value*s.hp/s.maxHp),0),budget=Math.round(Math.max(rules.budgetMin,Math.min(rules.budgetMax,rules.budgetBase+assessed*rules.budgetRate+footCount*rules.budgetPerRaider)));
-  return {seed,archetype,generated:true,map:{id:`frontier-${seed}-${archetype}`,map:cells.map(row=>row.join('')),keep:{x:structures[0].x,y:structures[0].y},spawns,sites:[],roads,districts,features,terrainPattern:terrain.id},
-    structures,requests,specialObjectives:[objective],siege,budget,guardCount:pick(rules.guardCounts)};
+  const map={id:`frontier-${seed}-${archetype}`,map:cells.map(row=>row.join('')),keep:{x:structures[0].x,y:structures[0].y},spawns,sites:[],roads,districts,features,terrainPattern:terrain.id};
+  const budgetPlan=frontierBudgetPlan(map,structures,archetype),budget=budgetPlan.available;
+  return {seed,archetype,generated:true,map,
+    structures,requests,specialObjectives:[objective],siege,budget,budgetPlan,guardCount:pick(rules.guardCounts)};
 }
 
 export function validateFrontierContract(candidate) {
@@ -296,6 +298,7 @@ export function generateFrontierContract(inputSeed=CONFIG.seed,inputArchetype='r
     rejected.push(validation.errors);
   }
   return {seed,archetype,generated:true,map:copy(FRONTIER_MAP),siege:copy(FRONTIER_SIEGE),structures:frontierSettlement(),
+    budgetPlan:frontierBudgetPlan(FRONTIER_MAP,frontierSettlement(),'handcrafted',CONFIG.frontier.budget),
     requests:frontierRequests(frontierSettlement()),specialObjectives:[],budget:CONFIG.frontier.budget,guardCount:CONFIG.frontier.guards.count,
     generation:{attempts:CONFIG.frontier.generator.maxAttempts,fallback:true,rejected}};
 }

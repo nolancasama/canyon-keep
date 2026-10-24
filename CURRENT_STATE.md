@@ -1,6 +1,16 @@
 # Current State
 
 ## Status
+Frontier geometry budgets and optional 50 G advanced scouting are implemented.
+Principal enclosure estimates now fund generated contracts; the handcrafted
+treasury is 1950 G (main curtain 1560 G, combined estimates 4200 G). Preparation
+shows an advisory budget block. Purchased scouting reports real front strength,
+dangerous types and wave directions, persists through retry, and emphasizes
+the primary threat at the map edge. Authored sieges without front plans explain
+why advanced scouting is unavailable. Canyon and wall-to-tower replacement
+remain unchanged. See the latest verification below; older budgets/tables are
+historical measurements.
+
 The Frontier Commission slices 1–3 (Milestones A–G) are implemented; generated
 contracts now use central castles and multi-directional, unequal sieges with
 banded scout intel and edge warnings (see Verification). Accepted
@@ -240,6 +250,57 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
+2026-10-24 geometry budgets / advanced scouting: `npm test` **194 passed,
+0 failed**, 202.1 seconds, including the unchanged Canyon campaign and existing
+wall-to-tower replacement tests. `node --check src/ui/interface.js` and
+`node --check src/render/renderer.js` also passed. No build script exists.
+
+The new suites cover enclosure classification/closure, footprint shape versus
+an equally padded rectangle, excluded/scattered outliers, geometry-dependent
+archetype formulas and repeatability, occupied-lot avoidance, authored and
+fallback estimates, Canyon's unchanged 1000 G, actual weighted front counts,
+types/directions/diversions/waves, mutation-free purchase failures, exact 50 G
+purchase, unchanged free intel/plan/groups, construction refund separation,
+JSON persistence and retry without another charge or refund.
+
+Balance sweep: seeds **1–8 per archetype**, starter skills, **96 complete
+contracts**, public previews/purchases/placements/start actions only. Every
+full main ring was affordable, buildable and trade-road accessible. Cells
+show **wins / 8 · mean assessed value preserved** (including defeats).
+
+| Strategy | Compact Town | Twin Settlements | Town + Outpost |
+| --- | ---: | ---: | ---: |
+| Main basic enclosure only | 0/8 · 60.3% | 0/8 · 65.1% | 0/8 · 64.1% |
+| Scouted fronts: selective walls + towers | 8/8 · 84.9% | 3/8 · 75.3% | 7/8 · 92.3% |
+| Reinforced main: full enclosure + towers | 7/8 · 72.8% | 2/8 · 71.6% | 6/8 · 91.8% |
+| Distributed walls + towers | 8/8 · 90.3% | 4/8 · 80.4% | 6/8 · 93.7% |
+
+The scouted strategy buys the real 50 G report, spends one quarter of remaining
+gold on main-front walls, then adds towers. Reinforced main leaves satellites
+exposed; distributed allocates walls/towers across principal settlements
+(one principal in Compact Town). All defenses use the real client treasury;
+there are no gold injections or schedule edits. Basic enclosure alone is not
+an effective killing defense. Twin keeps and outlying objectives remain
+difficult; budgets do not make every approach trivially successful. Enemy
+counts/composition/HP were **not tuned**.
+
+Legacy seed-1 equal-cost comparisons still pass at their original six/seven
+towers via a test-helper limit, preserving their original tactical assertion.
+The map-edge check now requires its cost to exceed the treasury, replacing
+the obsolete three-budget multiplier. No other old-budget fixtures needed
+changes. Handcrafted treasury is 1950 G versus main 1560 G and combined
+4200 G estimates; original authored defense fixtures retain their behavior.
+The specified dilation is tighter than an equally padded rectangular curtain
+on the connected irregular fixture; disconnected farming lobes and road gate
+crossings can exceed older unpadded rectangular estimates.
+
+Controller screenshots at 1366×768 (handcrafted and twin seed 274140) checked
+the budget block, scout dialog before/after purchase (50 G deducted) and the
+PRIMARY edge marker; no console errors. The scout card now hides the purchase
+button once bought and omits it where unavailable (handcrafted), keeping
+Begin building visible. Human playtest of the new budgets is still pending.
+Historical verification below retains its original budgets.
+
 After central castles and multi-directional sieges `npm test`: **174 passed,
 0 failed** (110 unchanged Canyon tests, 64 Frontier tests). New
 `test/frontier-fronts.test.js` sweeps 30 seeds per archetype: keep ≤7 tiles
@@ -398,10 +459,14 @@ No browser suites, controller acceptance checks or screenshots were run/produced
 UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 
 ## Known Issues / Next Steps
-- No known failing headless checks remain for slice 3. Controller behavioral
+- No known failing headless checks remain: latest `npm test` is 194/194.
+  Current budget/scouting UI has no captured visual evidence; 1366×768 layout,
+  markers, human playtesting and Claude's aesthetic review remain pending.
+  Controller behavioral
   acceptance, human playtesting and final visual review remain incomplete.
 - Generated sieges now attack from any of eight directions with unequal
-  fronts and optional second waves; balance is a 12-seed headless sweep only.
+  fronts and optional second waves; latest budget balance is a 96-contract
+  headless sweep across eight seeds per archetype and four public-action plans.
 - The generator intentionally uses four authored geographic patterns, not
   unrestricted terrain synthesis. Maps author no pendulum sites. Careers
   persist only skill levels, development points and completed-contract count;

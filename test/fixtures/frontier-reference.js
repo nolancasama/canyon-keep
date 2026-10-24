@@ -40,9 +40,9 @@ export function mainFront(state) {
 
 // Towers ring each keep at a bearing; 'focused' biases every tower toward the
 // main front, 'even' rotates the same towers through the four compass sides.
-export function applyGeneratedTowerBuild(game,mode='focused') {
+export function applyGeneratedTowerBuild(game,mode='focused',towerLimit=Infinity) {
   const keeps=game.state.structures.filter(s=>s.type==='keep'),front=mainFront(game.state).anchor;
-  const towerCount=Math.floor(game.state.gold/game.api.price('tower'));
+  const towerCount=Math.min(towerLimit,Math.floor(game.state.gold/game.api.price('tower')));
   // Twin contracts give the keep nearer the main front the larger share.
   const ordered=[...keeps].sort((a,b)=>Math.hypot(a.x-front.x,a.y-front.y)-Math.hypot(b.x-front.x,b.y-front.y));
   // 'weighted' splits towers across every reported front by its scout band.

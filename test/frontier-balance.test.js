@@ -7,6 +7,7 @@ import { calculateContractResults } from '../src/sim/frontier/contract.js';
 import { FRONTIER_HAMLET_BUILD, applyFrontierBuild, finishFrontier,
   frontierBalanceRow, requireFrontierAction, applyGeneratedTowerBuild, districtCurtainEstimate } from './fixtures/frontier-reference.js';
 import { WIDTH, HEIGHT } from '../src/data/map.js';
+import { BUDGET_STRATEGIES, applyBudgetStrategy } from './fixtures/frontier-budget-strategies.js';
 
 // Seed 1 is a multi-front contract in every archetype (compact and outpost
 // have a second wave, twin is an encirclement), chosen from a 12-seed sweep of
@@ -17,20 +18,44 @@ for(const archetype of ['compact','twin','outpost']) test(`Frontier ${archetype}
   const run=mode=>{
     const game=createGame({stage:'frontier',generated:true,seed,archetype});
     assert.equal(game.state.contract.generation.fallback,false,'HARNESS_PRECONDITION_FAILED: generated terrain');
-    const budget=game.state.gold,spent=applyGeneratedTowerBuild(game,mode);
+    // Retain the original equal-cost tactical comparison at six/seven towers;
+    // larger geometry budgets are exercised in full by the sweep below.
+    const budget=game.state.gold,spent=applyGeneratedTowerBuild(game,mode,archetype==='twin'?7:6);
     finishFrontier(game);
     return {game,budget,spent,row:frontierBalanceRow(game,`${archetype}:${seed}:${mode}`,spent)};
   };
   const probe=createGame({stage:'frontier',generated:true,seed,archetype}),prices={wall:probe.api.price('wall'),gate:probe.api.price('gate')};
   const equalCost=districtCurtainEstimate(probe.state,prices).reduce((n,d)=>n+d.cost,0),edgeRing=(2*(WIDTH-2)+2*(HEIGHT-4))*prices.wall;
   assert.ok(equalCost>probe.state.gold,'closed rings around every district exceed the shared budget');
-  assert.ok(edgeRing>probe.state.gold*3,'walling the whole map edge costs several budgets');
+  // The former >3 budgets threshold encoded the superseded 600–950 G range.
+  // The new treasury can fund a town, but still cannot wall the entire map.
+  assert.ok(edgeRing>probe.state.gold,'walling the whole map edge exceeds the construction budget');
   const weighted=run('weighted'),even=run('even');
   console.log('Frontier generated balance',JSON.stringify({weighted:weighted.row,even:even.row,budget:weighted.budget,equalCost,edgeRing}));
   assert.equal(weighted.spent,even.spent,'HARNESS_PRECONDITION_FAILED: equal-cost comparison');
   assert.equal(weighted.game.state.phase,'victory');assert.equal(weighted.game.state.results.paid,true);
   assert.ok(weighted.game.state.structures.filter(s=>s.type==='keep').every(s=>s.hp>0));
   assert.ok(weighted.row.preservation>even.row.preservation,'scout-weighted towers preserve more value than an even ring');
+});
+
+test('Frontier geometry budgets support distinct public-action defenses across eight seeds per archetype',()=>{
+  const table=[];
+  for(const archetype of ['compact','twin','outpost']) for(const strategy of BUDGET_STRATEGIES) {
+    let wins=0,preservation=0,spent=0;
+    for(let seed=1;seed<=8;seed++) {
+      const game=createGame({stage:'frontier',generated:true,seed,archetype});
+      assert.equal(game.state.contract.generation.fallback,false,'sweep uses generated geometry');
+      const built=applyBudgetStrategy(game,strategy);
+      assert.ok(built.spent>0&&built.spent<=game.state.prepGold,'public actions stay within construction treasury');
+      if(strategy==='main enclosure'||strategy==='reinforced main') assert.equal(built.completeMain,true,'main basic enclosure is affordable and buildable');
+      assert.equal(game.api.canStart().ok,true,'scripted defenses preserve the trade route');
+      const report=finishFrontier(game);
+      wins+=report.result==='victory'?1:0;preservation+=report.preservation;spent+=built.spent;
+    }
+    table.push({archetype,strategy,wins:`${wins}/8`,preserved:Math.round(preservation/8*10)/10,meanSpend:Math.round(spent/8)});
+  }
+  console.log('Frontier geometry budget sweep',JSON.stringify(table));
+  assert.ok(table.some(row=>row.wins!=='8/8'||row.preserved<98),'increased budgets do not make every approach a near-total-preservation victory');
 });
 
 test('Frontier guard reassignment trades keep protection for exposed farming property in a controlled raid',()=>{
