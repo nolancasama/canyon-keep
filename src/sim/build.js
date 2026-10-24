@@ -4,6 +4,7 @@ import { tileAt, structureAt, isWalkable, emit, blocksStructure } from './grid.j
 import { initializeMechanism, pruneLinks } from './mechanisms.js';
 import { stageFor } from '../data/stages.js';
 import { emergencyPlacement, placeEmergency } from './frontier/construction.js';
+import { classAMaxHp } from './frontier/skills.js';
 
 const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const failure = (reason, cost = 0) => ({ valid: false, ok: false, reason, cost });
@@ -103,7 +104,8 @@ export function placement(state, type, x, y, { line = false } = {}) {
   }
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const tx = x + dx, ty = y + dy;
-    if (stageFor(state).id==='canyon' ? tx < CONFIG.spawnSafeColumns : stageFor(state).map.spawns.some(s=>Math.abs(s.x-tx)<CONFIG.spawnSafeColumns)) return failure('Keep the spawn approach clear', cost);
+    if (stageFor(state).id==='canyon' ? tx < CONFIG.spawnSafeColumns : stageFor(state).map.spawns.some(s=>
+      state.frontierMap?Math.max(Math.abs(s.x-tx),Math.abs(s.y-ty))<CONFIG.spawnSafeColumns:Math.abs(s.x-tx)<CONFIG.spawnSafeColumns)) return failure('Keep the spawn approach clear', cost);
     if (!'.C'.includes(tileAt(tx, ty, state))) return failure('Build on canyon or castle floor', cost);
     if (structureAt(state, tx, ty)) return failure('Another structure occupies this tile', cost);
   }
@@ -129,8 +131,9 @@ export function place(state, type, x, y, options) {
       elapsed: 0, swingId: 0, hitIds: [] };
     state.pendulum = structure;
   } else {
-    structure = { id, type, x, y, w: def.w, h: def.h, hp: def.hp,
-      maxHp: def.hp, cost: def.cost, paidCost: check.replacement ? def.cost : check.cost, destroyed: false };
+    const maxHp=classAMaxHp(state,type,def.hp);
+    structure = { id, type, x, y, w: def.w, h: def.h, hp: maxHp,
+      maxHp, cost: def.cost, paidCost: check.replacement ? def.cost : check.cost, destroyed: false };
     initializeMechanism(structure, options);
     if (check.replacement) state.structures.splice(state.structures.findIndex(s => s.id === check.replacedId), 1, structure);
     else state.structures.push(structure);

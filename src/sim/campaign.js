@@ -11,6 +11,7 @@ import { STAGES, stageFor, siegeFor } from '../data/stages.js';
 import { initializeFrontier, respondToRequest, finalizeContract } from './frontier/contract.js';
 import { requestGuards, guardPosts } from './frontier/npcs.js';
 import { startFrontierConstruction, placeEmergency } from './frontier/construction.js';
+import { frontierSeed } from './frontier/generator.js';
 
 export function calculateResults(state) {
   const rules=CONFIG.rewards, before=state.snapshot;
@@ -71,9 +72,10 @@ export function createCampaignState(seed = CONFIG.seed) {
 export function createGame(seed = CONFIG.seed) {
   const options=typeof seed==='object'?seed:{};
   seed=options.seed??(typeof seed==='number'?seed:CONFIG.seed);
+  let frontierOptions={...options},frontierSession=options.stage==='frontier'?1:0;
   const makeState = stageId => {
-    const next=createCampaignState(seed);
-    if(stageId==='frontier') {initializeFrontier(next);startFrontierConstruction(next);}
+    const next=createCampaignState(stageId==='frontier'?frontierSeed(frontierOptions.seed??seed):seed);
+    if(stageId==='frontier') {initializeFrontier(next,frontierOptions);startFrontierConstruction(next);}
     return next;
   };
   let state = makeState(options.stage??'canyon');
@@ -85,11 +87,13 @@ export function createGame(seed = CONFIG.seed) {
     }
   };
   const api = {
-    selectStage(id) {
+    selectStage(id,contractOptions={}) {
       if(!STAGES[id]) return false;
+      if(id==='frontier') {frontierOptions={...contractOptions,seed:contractOptions.seed??seed};frontierSession++;}
       state=makeState(id);return true;
     },
-    startFrontier() { return api.selectStage('frontier'); },
+    startFrontier: (contractOptions={}) => api.selectStage('frontier',contractOptions),
+    frontierSession: () => frontierSession,
     returnToTitle() { state=makeState('canyon');state.phase='title';return true; },
     respondToRequest: (id,choice) => respondToRequest(state,id,choice),
     requestGuards: (postId,count) => requestGuards(state,postId,count),
@@ -203,7 +207,11 @@ export function createGame(seed = CONFIG.seed) {
       api.openScoutReport();
       return true;
     },
-    restartCampaign() { state = makeState(stageFor(state).id); return true; },
+    restartCampaign() {
+      const id=stageFor(state).id;
+      if(id==='frontier') frontierSession++;
+      state=makeState(id);return true;
+    },
     phase: () => state.phase,
   };
   return { get state() { return state; }, api };

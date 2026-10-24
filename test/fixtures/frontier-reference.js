@@ -15,6 +15,42 @@ export const FRONTIER_PRESERVATION_BUILD=[
   {type:'tower',x:25,y:18},{type:'tower',x:25,y:21},
 ];
 
+// A dedicated outpost tower costs 140 G; Communication 3 negotiates the
+// elder's 100 G survival offer to 150 G. The remaining works defend the town.
+export const FRONTIER_HAMLET_BUILD=[
+  {type:'wall',x:46,y:9},{type:'tower',x:47,y:9},
+  {type:'tower',x:31,y:16},{type:'tower',x:31,y:20},
+  {type:'tower',x:25,y:18},{type:'tower',x:25,y:21},
+];
+
+export function frontierBalanceRow(game,label,spent) {
+  const result=game.state.results;
+  return {label,spent,outcome:result.result,preservation:result.preservation,
+    keepHp:game.state.structures.filter(s=>s.type==='keep').map(s=>s.hp),
+    liability:result.liability,earnings:result.finalEarnings,
+    districts:Object.fromEntries(result.damageByDistrict.map(d=>[d.id,d.liability]))};
+}
+
+// Focus all affordable archer coverage ahead of mandatory keeps. Candidate
+// locations use public previews, so occupied lots and placement rules apply.
+export function applyGeneratedFocusedBuild(game) {
+  const keeps=game.state.structures.filter(s=>s.type==='keep');
+  const towerCount=Math.floor(game.state.gold/game.api.price('tower'));
+  for(let i=0;i<towerCount;i++) {
+    // The twin reference has a southern brute approach: retain two northern
+    // towers and put four on the southern keep instead of splitting evenly.
+    const keep=keeps.length===2?keeps[i<2?0:1]:keeps[0],candidates=[];
+    for(let y=keep.y-4;y<=keep.y+6;y++) for(let x=keep.x+3;x<=keep.x+10;x++) {
+      if(game.api.preview('tower',x,y).ok) candidates.push({x,y,score:Math.hypot(x-(keep.x+7),y-(keep.y+1))});
+    }
+    candidates.sort((a,b)=>a.score-b.score||a.y-b.y||a.x-b.x);
+    const tile=candidates[0];
+    if(!tile) throw new Error('HARNESS_PRECONDITION_FAILED: no legal focused tower site');
+    requireFrontierAction(game.api.place('tower',tile.x,tile.y),'focused keep coverage');
+  }
+  return game.state.prepGold-game.state.gold;
+}
+
 export function requireFrontierAction(result, description) {
   if(!result?.ok) throw new Error(`HARNESS_PRECONDITION_FAILED: ${description}: ${result?.reason}`);
 }

@@ -11,8 +11,19 @@ The player is the client's hired fortress engineer. Gold funds military works;
 the client owns and automatically grows houses, farms and the population.
 Designing, testing, repairing and improving the castle is the fun.
 Prefer a finished minimal mechanic over an elaborate unfinished one. No scope
-beyond this file (no RPG, crafting, resources other than gold, multiplayer,
-procedural maps, ladders/tunneling/flanking AI, building during battle).
+beyond this file (no elaborate RPG, crafting, multiplayer, or
+ladders/tunneling/flanking AI). Frontier's procedural contracts, small career
+record and emergency construction are stage-specific exceptions below.
+
+## Reading this specification: shared systems and stage boundaries
+
+Section 1 specifies the shared technical contract. Sections 2–12 specify the
+**Canyon campaign**, including its map, balance, construction restrictions,
+three-siege progression, civilian behavior and treasury. Section 13 specifies
+**The Frontier Commission** and explicitly overrides shared behavior only for
+that stage. The 2026-10-24 frozen design decision governs Frontier's scope.
+Shared grid, structures, combat, mechanisms, rendering and snapshot machinery
+are reused through stage descriptors; Frontier career storage is UI-owned.
 
 ---
 
@@ -453,7 +464,7 @@ duplicate rewards, determinism (two runs of S1 with same build → identical
 event-log hash), headless full S1 run with a reasonable reference build ends in
 victory and with no build ends in defeat.
 
-## 13. The Frontier Commission — slices 1–2 (Milestones A–D)
+## 13. The Frontier Commission — stage-specific rules (Milestones A–G)
 
 The title offers **Canyon Keep Campaign** and **The Frontier Commission**.
 Sections 2–12 continue to specify the canyon campaign, including its original
@@ -488,8 +499,8 @@ without arrival times. Building requests offer Promise, Decline, Ask more
 Communication starts at 2; at least one request requires 3. The journal records
 choices, locations, rewards and survival conditions. Workshop funds are a
 conditional immediate owner advance recorded separately from construction money;
-final settlement reconciles it with the survival condition. There is no career
-economy. Declines have no penalty; broken promises lose their reward and one
+final settlement reconciles it with the survival condition. Earnings do not
+carry into later construction budgets. Declines have no penalty; broken promises lose their reward and one
 contract-local reputation point. Self-defense choices deploy at Start Siege.
 
 Frontier foot raiders select a nearby valuable property through the stage's
@@ -562,5 +573,53 @@ and waiting state. Disabled Class A entries explain their prep-only restriction.
 The centered title has two labelled cards, descriptions and Play buttons, with
 construction/HUD/key hints hidden.
 
-Slice 3 adds skills progression, procedural contracts and balance. The
-controller-frozen 2026-10-24 design entry remains authoritative.
+### Engineering skills and career
+
+Four skills start at Communication 2, Structural 1, Field 1, Mechanical 1,
+with a maximum of 4. Communication gates negotiation and existing guard
+reassignment. Structural adds 5% Class A maximum HP per level above 1.
+Field subtracts 0.3 seconds from emergency build time per extra level,
+with a floor of 0.8 seconds. Mechanical subtracts 8% of base sensor,
+launcher, retractable and pendulum cooldowns per extra level. These effects
+apply only to Frontier and never bypass placement rules. Prep lists each
+level and its current numeric effect; skills enter the sim as copied data.
+
+A fulfilled contract grants one development point, or two for Exceptional
+Engineering; failure grants none. Spending on the title/contract screen adds
+one level for one point. The UI owns `{skills, points, contractsCompleted}`,
+optional localStorage access under try/catch, and Reset career. A UI contract
+session ledger survives siege retries, so the same siege cannot award twice.
+Storage failure leaves the full game playable with an in-memory career.
+
+### Seeded procedural commissions
+
+The contract screen offers the handcrafted commission, generated contracts,
+replay, a seed input, and Compact Town / Twin Settlements / Town + Outpost
+or seed-selected archetype. The seed appears in briefing and the HUD.
+Compact Town has a principal settlement and exposed farming outskirts;
+Twin Settlements has two comparably valuable communities, both keeps
+mandatory, sharing one budget; Town + Outpost has a secure town and remote
+hamlet. Enemy breach fields consider every living keep in Frontier.
+
+Authored terrain patterns combine bending rivers with bridges/fords, ridges
+and rock outcrops with seeded road routes and irregular district clusters.
+Seeds vary terrain, roads, property/population, keep positions, guard counts,
+entry edges/points, owner names/requests and special objectives. Budget scales
+with acceptance value; a separate complete curtain for every district is
+unaffordable. Named-building survival and preservation of at least 80% of
+farm buildings have explicit mandatory/optional labels, locations and
+reward/penalty amounts. Mandatory special failure fails the contract;
+optional failure affects the itemized payment and rating.
+
+Validation checks placement/overlaps, edge entries, objective spawn clearance,
+enemy reachability of every keep, civilian evacuation, connected district
+roads, defensive space, NPC pathability and multiple valuable districts.
+Invalid candidates retry using a deterministic `(seed, attempt)` derivation
+up to the configured limit, then use the handcrafted map. Attempts, rejection
+reasons and fallback state are recorded. Identical seed and archetype produce
+deep-equal initial simulation state. Restart regenerates the same contract;
+Retry restores the exact pre-siege snapshot including construction and promises.
+
+Headless balance fixtures cover unaffordable equal defense, focused victories
+for all archetypes, the keep/property tradeoff of guard reassignment, and a
+negotiated outlying promise worth more than its dedicated paid defenses.

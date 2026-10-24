@@ -37,8 +37,10 @@ function buildFlow(state, target) {
     }
     return first;
   }
-  const keep = target || state.structures.find(s => s.type === 'keep') || { ...KEEP, w:3, h:3 };
-  for (let y=keep.y;y<keep.y+keep.h;y++) for (let x=keep.x;x<keep.x+keep.w;x++) {
+  const keeps = target ? [target] : state.stageId==='frontier'
+    ? state.structures.filter(s=>s.type==='keep'&&!s.destroyed&&s.hp>0)
+    : [state.structures.find(s => s.type === 'keep') || { ...KEEP, w:3, h:3 }];
+  for(const keep of keeps) for (let y=keep.y;y<keep.y+keep.h;y++) for (let x=keep.x;x<keep.x+keep.w;x++) {
     distances[index(x,y)] = 0; push([0,x,y]);
   }
   while (heap.length) {

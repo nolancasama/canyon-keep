@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { isWalkable, blockingAt, emit } from './grid.js';
 import { damageEnemy } from './enemies.js';
 import { rebuildFlow } from './pathing.js';
+import { deviceCooldown } from './frontier/skills.js';
 
 export const FACINGS = ['N', 'E', 'S', 'W'];
 const DIRECTIONS = { N: [0,-1], E: [1,0], S: [0,1], W: [-1,0] };
@@ -105,7 +106,7 @@ function changeBlocking(state,s,status,event) {
 }
 
 function skipRaise(state,s) {
-  s.status='cooldown';s.elapsed=0;s.cooldown=CONFIG.retractable.cooldown;
+  s.status='cooldown';s.elapsed=0;s.cooldown=deviceCooldown(state,CONFIG.retractable.cooldown);
   emit(state,'wallSkip',{structureId:s.id,x:s.x+.5,y:s.y+.5});
 }
 
@@ -139,14 +140,14 @@ export const registry = {
       s.elapsed+=dt;
       if(s.status==='raised'&&s.elapsed>=rules.hold-1e-8) changeBlocking(state,s,'lowering','wallLower');
       else if(s.status==='lowering'&&s.elapsed>=rules.lower-1e-8) {
-        s.status='cooldown';s.elapsed=0;s.cooldown=rules.cooldown;
+        s.status='cooldown';s.elapsed=0;s.cooldown=deviceCooldown(state,rules.cooldown);
       }
     },
   },
   launcher: {
     activate(state,s) {
       if(s.cooldown>1e-8) return false;
-      s.cooldown=CONFIG.launcher.cooldown;
+      s.cooldown=deviceCooldown(state,CONFIG.launcher.cooldown);
       s.volleyRemaining=CONFIG.launcher.bolts-1;s.volleyTimer=CONFIG.launcher.interval;
       fireBolt(state,s);
       return true;
@@ -169,7 +170,7 @@ export function activate(state,device) {
 }
 
 function fireSensor(state,s) {
-  s.pending=null;s.cooldown=CONFIG.sensor.cooldown;s.flashRemaining=CONFIG.sensor.flashDuration;
+  s.pending=null;s.cooldown=deviceCooldown(state,CONFIG.sensor.cooldown);s.flashRemaining=CONFIG.sensor.flashDuration;
   for(const id of s.links) {
     const device=find(state,id);
     if(device) activate(state,device);

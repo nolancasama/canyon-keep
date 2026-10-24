@@ -12,6 +12,7 @@ import { resetMechanisms, stepMechanisms } from './mechanisms.js';
 import { stageFor, scheduleFor } from '../data/stages.js';
 import { startFrontierNpcs, stepFrontierNpcs } from './frontier/npcs.js';
 import { startFrontierConstruction, stepFrontierConstruction } from './frontier/construction.js';
+import { objectiveMet } from './frontier/contract.js';
 
 export function createSiegeState(state) {
   state.phase = 'siege';
@@ -55,7 +56,8 @@ export function stepSiege(state, dt = SIM_DT) {
   // Process newly killed carriers on the following tick, preserving their delay.
   const keep = state.structures.find(s => s.type === 'keep');
   const living = state.inhabitants.filter(i => i.hp > 0);
-  if (!keep || keep.hp <= 0 || (!stageFor(state).flags.contractPayment && living.length === 0)) {
+  const contractFailed=state.contract?.mandatoryObjectives.some(goal=>!objectiveMet(state,goal));
+  if (!keep || keep.hp <= 0 || contractFailed || (!stageFor(state).flags.contractPayment && living.length === 0)) {
     state.phase = 'defeat';
     emit(state, 'defeat');
   } else if (state.spawnIndex === state.schedule.length && !state.enemies.some(e => e.hp > 0) && state.explosions.length === 0) {

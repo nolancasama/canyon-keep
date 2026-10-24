@@ -1,5 +1,5 @@
 import { CONFIG } from '../../config.js';
-import { FRONTIER_MAP } from '../../data/frontier/map.js';
+import { stageFor } from '../../data/stages.js';
 import { isWalkable, structureAt, blocksStructure, emit } from '../grid.js';
 import { hasTradeRoad } from '../build.js';
 import { createInhabitants } from '../inhabitants.js';
@@ -22,7 +22,8 @@ function safePost(state,building,slot=0) {
   const tiles=perimeter(building).filter(p=>npcWalkable(state,p.x,p.y));
   if(tiles.length) return tiles[slot%tiles.length];
   const safe=[];
-  for(let y=0;y<FRONTIER_MAP.map.length;y++) for(let x=0;x<FRONTIER_MAP.map[y].length;x++) if(npcWalkable(state,x,y)) safe.push({x,y});
+  const map=stageFor(state).map;
+  for(let y=0;y<map.map.length;y++) for(let x=0;x<map.map[y].length;x++) if(npcWalkable(state,x,y)) safe.push({x,y});
   safe.sort((a,b)=>Math.abs(a.x-building.x)+Math.abs(a.y-building.y)-Math.abs(b.x-building.x)-Math.abs(b.y-building.y)||a.y-b.y||a.x-b.x);
   return safe[0]??{x:building.x,y:building.y};
 }
@@ -30,7 +31,7 @@ export function guardPosts(state) {
   if(state.stageId!=='frontier') return [];
   const buildings=state.structures.filter(s=>s.owner&&alive(s));
   const keep=buildings.find(s=>s.type==='keep'),posts=[{id:'keep',name:keep.label,buildingId:keep.id,district:keep.district}];
-  for(const district of FRONTIER_MAP.districts) {
+  for(const district of stageFor(state).map.districts) {
     const building=buildings.find(s=>s.district===district.id&&s.type!=='keep');
     if(building) posts.push({id:district.id,name:district.name,buildingId:building.id,district:district.id});
   }
@@ -52,8 +53,8 @@ function defender(state,type,id,postId,slot=0) {
   positionAtPost(state,unit,slot);return unit;
 }
 export function initializeFrontierNpcs(state) {
-  state.guards=Array.from({length:CONFIG.frontier.guards.count},(_,i)=>defender(state,'guard',`guard-${i+1}`,'keep',i));
-  state.militia=FRONTIER_MAP.districts.flatMap(d=>Array.from({length:CONFIG.frontier.militia.countPerDistrict},(_,i)=>
+  state.guards=Array.from({length:state.frontierGuardCount??CONFIG.frontier.guards.count},(_,i)=>defender(state,'guard',`guard-${i+1}`,'keep',i));
+  state.militia=stageFor(state).map.districts.flatMap(d=>Array.from({length:CONFIG.frontier.militia.countPerDistrict},(_,i)=>
     defender(state,'militia',`militia-${d.id}-${i+1}`,d.id,i)));
   createInhabitants(state);
   for(const person of state.inhabitants) {
@@ -168,7 +169,7 @@ function stepDefender(state,unit,dt) {
   if(unit.hp<=0) {unit.status='dead';unit.targetId=null;return;}
   const militia=unit.type==='militia',rules=CONFIG.frontier[militia?'militia':'guards'];
   unit.attackCooldown=Math.max(0,unit.attackCooldown-dt);
-  const keep=state.structures.find(s=>s.type==='keep');
+  const keep=nearestKeep(state,unit);
   if(militia&&(unit.retreating||unit.hp<unit.maxHp*rules.retreatFraction)) {
     unit.retreating=true;unit.targetId=null;
     const result=travel(state,unit,keep.x+.5,keep.y+.5,rules.speed*dt);
@@ -189,14 +190,20 @@ function stepDefender(state,unit,dt) {
   }
 }
 export function stepFrontierNpcs(state,dt) {
-  const keep=state.structures.find(s=>s.type==='keep');
   for(const person of state.inhabitants) {
     if(person.hp<=0) {person.status='dead';continue;}
     if(person.sheltered) continue;
+    const keep=nearestKeep(state,person);
     const result=travel(state,person,keep.x+.5,keep.y+.5,CONFIG.inhabitants.fleeSpeed*dt);
     person.status=result==='blocked'?'sheltering':result==='arrived'?'sheltered':'evacuating';person.sheltered=result==='arrived';
   }
   for(const unit of [...state.guards,...state.militia]) stepDefender(state,unit,dt);
+}
+
+function nearestKeep(state,unit) {
+  const keeps=state.structures.filter(s=>s.type==='keep'&&alive(s));
+  keeps.sort((a,b)=>Math.hypot(a.x-unit.x,a.y-unit.y)-Math.hypot(b.x-unit.x,b.y-unit.y));
+  return keeps[0]??state.structures.find(s=>s.type==='keep');
 }
 
 // Frontier enemies use the same bounded terrain-aware movement when pursuing

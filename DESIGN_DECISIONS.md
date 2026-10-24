@@ -650,3 +650,60 @@ Deferred / rejected for this pass
   controls. Frontier battle presentation adds live objective/property/civilian/
   promise/supply observations and visible site progress/waits. Controller/Claude
   owns visual judgment; no browser acceptance or screenshot run was performed.
+
+## 2026-10-24 — Frontier Commission slice 3 implementation decisions
+
+- Frontier receives a normalized copy of four skill levels at contract start.
+  Structural changes only player Class A maximum HP; client property and
+  Class B retain their authored HP. Mechanical scales device cooldowns at
+  activation/reset, leaving volley, rise/hold and swing durations unchanged.
+  Field uses the frozen reduction and 0.8-second floor. Placement still uses
+  the same footprint, terrain, support, route and affordability checks.
+- The UI owns a small career record and optional guarded localStorage access.
+  Awarded contract-session tokens live outside simulation and retry snapshots;
+  a paid victory awards once, failure never awards, and a later successful
+  retry of a failed contract can award. Fresh replay/restart is a new played
+  commission. Spending and reset happen on the title before acceptance;
+  neither earnings nor reputation carry into construction budgets.
+- Generated commissions combine three authored terrain patterns with seeded
+  irregular lots and a connected road tree. Compact Town, Twin Settlements
+  and Town + Outpost each have three valuable districts. Acceptance value
+  scales the shared budget within Frontier-only CONFIG limits. Entries vary
+  across east and north/south edges; scouts count the actual generated schedule.
+  Owner requests draw from a data pool with seeded owner names.
+- Validation rejects unsafe objectives, blocked access, overlapping lots,
+  disconnected roads, unreachable keeps, insufficient defensive space and
+  missing district choices. Attempts use deterministic seed mixing, capped at
+  eight, then clone the handcrafted fallback. Test hooks can force rejection
+  but cannot bypass validation. Contract metadata records attempts, reasons
+  and fallback. String seeds normalize to the displayed uint32 before both
+  map generation and simulation RNG initialization, so displayed-seed replay
+  also reproduces actor/RNG state.
+- Both Twin Settlements keeps are mandatory. Frontier breach fields use all
+  living keeps; civilians route toward their nearest keep and emergency blocking
+  construction preserves routes to every keep. The Canyon single-keep path
+  and loss rules remain unchanged.
+- Special objectives protect a named warehouse/store/infirmary, or require
+  at least 80% of the farming district's original properties to remain
+  standing (building count, including barns). Each states location,
+  mandatory/optional status, reward and penalty. Mandatory failure ends the
+  commission; optional loss reduces the nonnegative mayor fee and prevents
+  Exceptional Engineering. Special penalties are separate result line items.
+- Balance fixtures select a keep-focused scenario from its initial optional
+  objective briefing, before combat; sacrificing a mandatory outlying
+  objective is intentionally not a valid keep-only plan. Full rectangular
+  district curtains provide a transparent equal-defense estimate, not a
+  claim about minimum-cost terrain-assisted protection. No existing Canyon
+  or handcrafted Frontier combat, reward or construction prices were tuned.
+- Final `npm test`: 169 passed, 0 failed, including the original 110 Canyon
+  assertions. Generator checks sweep 30 seeds per archetype without fallback.
+  Keep-focused generated victories use Compact seed 2 (82.6% preserved),
+  Twin seed 3 (73.3%; keeps 2000/1220 HP), and Outpost seed 1 (73.8%).
+  The controlled reassignment fixture isolates simultaneous farm/keep contacts:
+  farm liability 180→0 G trades keep HP 2000→1646. A negotiated hamlet promise
+  pays 150 G against 140 G dedicated defenses in a full-contract victory.
+  Early fixture failures were traced: isolated guards died before later
+  full-schedule raids; even tower allocation left the southern twin keep
+  facing a 69-HP brute. Fixtures now isolate the guard mechanism and weight
+  southern tower coverage. Product balance was not changed to fit the tests.
+  No controller acceptance, browser suite or visual evidence was produced.

@@ -14,7 +14,8 @@ export const STAGES = {
     targeting:choosePropertyTarget,
     flags:{battleConstruction:true,contractPayment:true,npcDefenders:true,growth:false} },
 };
-export const stageFor = state => STAGES[state?.stageId]??STAGES.canyon;
+export const stageFor = state => state?.stageId==='frontier'&&state.frontierMap?
+  {...STAGES.frontier,map:state.frontierMap,sieges:{1:state.frontierSiege??FRONTIER_SIEGE}}:STAGES[state?.stageId]??STAGES.canyon;
 export const siegeFor = state => stageFor(state).sieges[state.siegeIndex??1];
 export function scheduleFor(state) {
   if(stageFor(state).id==='canyon') return expandSchedule(state.siegeIndex);

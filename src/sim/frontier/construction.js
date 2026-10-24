@@ -3,6 +3,7 @@ import { WIDTH } from '../../data/map.js';
 import { stageFor } from '../../data/stages.js';
 import { isWalkable, tileAt, structureAt, blocksStructure, emit } from '../grid.js';
 import { damageEnemy } from '../enemies.js';
+import { emergencyBuildTime } from './skills.js';
 
 export const CLASS_B=['barricade','palisade','caltrops'];
 const fail=(reason,cost=0)=>({ok:false,valid:false,reason,cost});
@@ -17,16 +18,18 @@ export function hasEnemyRoute(state,candidate=null,excludeId=null) {
   const blocked=(x,y)=>!isWalkable(x,y,state)||reserved.some(s=>contains(s,x,y))||
     (blocksStructure(structureAt(state,x,y))&&structureAt(state,x,y).type!=='keep');
   const queue=stageFor(state).map.spawns.filter(p=>!blocked(p.x,p.y)),seen=new Set(queue.map(p=>p.y*WIDTH+p.x));
+  const reached=new Set();
   for(let i=0;i<queue.length;i++) {
     const p=queue[i];
-    if(structureAt(state,p.x,p.y)?.type==='keep') return true;
+    const building=structureAt(state,p.x,p.y);
+    if(building?.type==='keep') reached.add(building.id);
     for(const [dx,dy] of directions) {
       const x=p.x+dx,y=p.y+dy,key=y*WIDTH+x;
       if(seen.has(key)||blocked(x,y)) continue;
       seen.add(key);queue.push({x,y});
     }
   }
-  return false;
+  return state.structures.filter(s=>s.type==='keep'&&!s.destroyed&&s.hp>0).every(s=>reached.has(s.id));
 }
 
 export function emergencyPlacement(state,type,x,y) {
@@ -40,7 +43,7 @@ export function emergencyPlacement(state,type,x,y) {
   for(let dy=0;dy<def.h;dy++) for(let dx=0;dx<def.w;dx++) {
     const tx=x+dx,ty=y+dy;
     if(!'.C'.includes(tileAt(tx,ty,state))) return fail('Build on open ground',cost);
-    if(stageFor(state).map.spawns.some(p=>Math.abs(p.x-tx)<CONFIG.spawnSafeColumns)) return fail('Keep the spawn approach clear',cost);
+    if(stageFor(state).map.spawns.some(p=>(state.frontierMap?Math.max(Math.abs(p.x-tx),Math.abs(p.y-ty)):Math.abs(p.x-tx))<CONFIG.spawnSafeColumns)) return fail('Keep the spawn approach clear',cost);
     if(structureAt(state,tx,ty)||state.structures.some(s=>s.owner&&contains(s,tx,ty))||
       (state.constructionSites??[]).some(s=>contains(s,tx,ty))) return fail('Another structure or site occupies this tile',cost);
     if((state.destroyedClassATiles??[]).some(p=>p.x===tx&&p.y===ty)) return fail('Destroyed Class A ground cannot be rebuilt this siege',cost);
@@ -55,7 +58,7 @@ export function placeEmergency(state,type,x,y) {
   if(!check.ok) return check;
   const def=CONFIG.structures[type],rules=CONFIG.frontier;
   const site={id:`site-${state.nextId++}`,type,x,y,w:def.w,h:def.h,elapsed:0,
-    duration:Math.max(0,rules.buildTime-Math.max(0,(state.skills.field??rules.starterField)-1)*rules.fieldBuildReduction),status:'building'};
+    duration:emergencyBuildTime(state),status:'building'};
   state.constructionSites.push(site);state.gold-=check.cost;state.emergency.spent+=check.cost;
   emit(state,'constructionStarted',{structureId:site.id,typeOfStructure:type,x,y});
   return {...check,site};

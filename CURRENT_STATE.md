@@ -1,13 +1,15 @@
 # Current State
 
 ## Status
-The Frontier Commission slices 1–2 (Milestones A–D) implement a selectable
-handcrafted contract, owner requests, whole-gold accounting, autonomous guards
-and militia, civilian evacuation, Communication-gated reassignment, owner
-self-defense and battle-time makeshift construction. The centered title opens
-either stage. Frontier has 24 civilian buildings plus the keep, branching roads
-and a bending river. Slice 1 is accepted (22a87bd); slice 2 is implemented for
-controller review, with verification recorded below. Canyon rules are unchanged.
+The Frontier Commission slices 1–3 (Milestones A–G) are implemented. Accepted
+slices 1–2 (22a87bd, c8de882) are extended with four visible engineering skills,
+slow UI-owned career progression, seeded contracts for Compact Town, Twin
+Settlements and Town + Outpost, deterministic validation/reseeding/fallback,
+seed/replay controls, twin-keep results and final balance fixtures. The
+handcrafted commission, requests, NPCs, journal, emergency construction and
+exact siege retry remain available. Canyon behavior and balance are unchanged.
+Slice 3 is implemented and headless-verified; controller acceptance and final
+aesthetic judgment have not been performed.
 
 Fortress Engineer milestones 1–4 implemented: bounties, settlement growth,
 spiked/golem walls, trigger mechanisms, scout intel, impact feedback and balance fixtures,
@@ -113,6 +115,28 @@ Run headless simulation tests with `npm test`. No dependencies or build step.
   destroyed civilian sites. Repair all affects military structures only.
 
 ## Debug / Harness Surface
+New Frontier observations are plain read-only data on the existing live
+`window.__game.state`: `skills` (communication/structural/field/mechanical),
+`contract.seed`, `archetype`, `generated`, `generation` (attempts, fallback,
+rejected reason arrays), `mandatoryObjectives`, `specialObjectives` (location,
+mandatory flag, reward/penalty), `frontierMap` and `frontierSiege` for generated
+contracts. Results add `keepStatuses`, `specialObjectives[].met` and
+`specialPenalty`. Skill helpers in `src/sim/frontier/skills.js` expose numeric
+effects; built Class A structures expose the resulting `hp` / `maxHp`, sites
+their duration, and devices their actual cooldown/reset timers.
+
+The UI's `window.__frontierCareer` returns an immutable snapshot of `skills`,
+`points`, `contractsCompleted`, `contractSession` and `developmentAward`.
+`api.frontierSession()` identifies fresh played commissions outside sim
+snapshots; it is stable on Retry and advances on fresh starts/restarts.
+`createGame({stage:'frontier',generated:true,seed,archetype,skills})`,
+`api.startFrontier(options)` and `api.selectStage('frontier',options)` accept
+plain contract data. Archetype IDs are `compact`, `twin`, `outpost`, `random`.
+Seeds accept uint32 numbers or deterministic text hashes; the displayed
+normalized number also reproduces the initial RNG/actor state. Generation's
+data-only test hooks `rejectAttempts` and `forceFailure` are accepted by
+`generateFrontierContract(seed,archetype,hooks)`; they never bypass validation.
+
 Frontier observations use this same read-only presentation surface:
 `state.stageId === 'frontier'`, `contract` (acceptance assessment, requests,
 briefing, paid flag, earnings, owner advances, local reputation), `structures`
@@ -214,6 +238,48 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
+Final slice-3 `npm test`: **169 passed, 0 failed** (110 unchanged Canyon tests,
+59 Frontier tests). The 22 new tests cover numerical skills and Canyon
+exclusion, career awards/spending/reset/storage failures/retry idempotence,
+generator reproducibility and string/numeric seed replay, 30 seeds for each
+archetype, clustering/overlaps/spawns/roads/evacuation/objectives, deterministic
+rejection/fallback, twin mandatory failure, and balance. All 90 swept maps
+generate without fallback. UI and renderer `node --check` checks pass; no
+dependencies/build step were added. No browser suite, controller acceptance,
+screenshots or aesthetic review were run.
+
+Final deterministic balance measurements (starter skills, except Communication
+3 for the negotiated hamlet fixture):
+
+| Contract / plan | Budget | Spend | Equal district curtains | Result | Value preserved | Keep HP |
+| --- | ---: | ---: | ---: | --- | ---: | --- |
+| Handcrafted / hamlet promise | 800 G | 620 G | 3400 G | Victory | 89.3% | 2000 |
+| Compact Town / seed 2 | 720 G | 720 G | 3440 G | Victory | 82.6% | 2000 |
+| Twin Settlements / seed 3 | 720 G | 720 G | 3440 G | Victory | 73.3% | 2000 / 1220 |
+| Town + Outpost / seed 1 | 720 G | 720 G | 3680 G | Victory | 73.8% | 2000 |
+
+Generated fixtures choose the first seed with an optional special objective
+from initial briefing data, then use public previews/placements to concentrate
+towers ahead of keeps. The twin plan allocates two northern and four southern
+towers; traces showed the evenly split plan lost the southern keep with its
+brute at 69 HP, while the north had no keep damage. Equal curtains mean separate
+rectangular wall/gate perimeters, not optimal terrain-assisted construction.
+
+The controlled guard fixture compares identical simultaneous local contacts
+on the handcrafted map: two foot raiders at the hill farm and four chiselers
+near the keep. It uses real combat/NPCs for 12 simulated seconds with the
+normal arrival schedule replaced solely to isolate reassignment. Four keep
+guards yield farm liability **180 G**, keep **2000 HP**, **0** arrivals at the
+keep; assigning those same guards to the hill farm yields **0 G**, **1646 HP**,
+**4** arrivals. Full-schedule traces showed isolated farm guards were overwhelmed
+before later raids, masking this specific tradeoff. The hamlet promise pays
+**150 G** after Communication 3 negotiation, exceeding the dedicated wall and
+tower's **140 G** cost; the full contract wins with the meeting house standing.
+No existing balance values were tuned.
+
+Earlier verification is retained below as history; its old map measurements
+are not the final slice-3 balance table.
+
 Frontier slice 2 integrated `npm test`: **147 passed, 0 failed**, including all
 110 unchanged canyon tests and 37 Frontier tests. `node --check
 src/ui/interface.js` and `node --check src/render/renderer.js` pass; no build
@@ -300,16 +366,26 @@ No browser suites, controller acceptance checks or screenshots were run/produced
 UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 
 ## Known Issues / Next Steps
-- Frontier slice 3: skills
-  advancement, procedural contracts and balance. Communication gates and a Field
-  build-time hook exist; there is no persistent career or procedural map yet.
+- No known failing headless checks remain for slice 3. Controller behavioral
+  acceptance, human playtesting and final visual review remain incomplete.
+- The generator intentionally uses three authored geographic patterns, not
+  unrestricted terrain synthesis. Maps author no pendulum sites. Careers
+  persist only skill levels, development points and completed-contract count;
+  earnings and reputation stay contract-local. A storage-denied browser loses
+  its in-memory career when the page closes.
 - Frontier workshop payment is an immediate conditional advance in owner
   earnings, reconciled at results; a broken promise pays zero in the final
   ledger. No owner payment or bounty can fund construction.
 - Frontier visual layout and final aesthetic judgment remain for the
   controller/Claude. No screenshots or browser acceptance were produced here.
 - Not yet play-tested by a human; balance comes from headless reference runs.
-  First playtest questions: is S3 too hard without the pendulum, is the
+  Frontier playtest questions: are skill effects and slow point awards clear?
+  Are mandatory special objectives distinguishable from optional owner promises?
+  Do Twin Settlements feel similarly valuable, and does protecting both keeps
+  leave a satisfying choice over farming losses? Are seeds, replay and fallback
+  understandable? Does reassignment feel worthwhile before isolated guards are
+  overwhelmed? Do briefing, career, prep skills and both keep results fit and
+  remain readable at 1366×768? Canyon questions: is S3 too hard without the pendulum, is the
   pendulum worth 400 gold, do players discover forward walls at bends? Do scout
   reports help players choose spikes, golems and trigger lanes, and does the very
   successful mechanical fixture leave enough room for other viable approaches?

@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { SITES } from '../data/map.js';
 import { isWalkable, blockingAt, emit, damageStructure } from './grid.js';
 import { damageEnemy } from './enemies.js';
+import { deviceCooldown } from './frontier/skills.js';
 
 function siteFor(pendulum) { return SITES.find(site=>String(site.id)===String(pendulum.siteId)); }
 const ease = progress => (1-Math.cos(Math.PI*progress))/2;
@@ -81,12 +82,13 @@ export function stepPendulum(state,dt) {
     p.angle=start+(end-start)*ease(progress);
     hitSweep(state,p,site,previousAngle);
     if(progress>=1-1e-8) {
-      p.status='resetting';p.elapsed=0;p.resetRemaining=config.reset;
+      p.status='resetting';p.elapsed=0;p.resetRemaining=deviceCooldown(state,config.reset);
       emit(state,'pendulumReset',{x:site.x+.5,y:site.y+.5,swingId:p.swingId});
     }
   } else if(p.status==='resetting') {
-    p.resetRemaining=Math.max(0,config.reset-p.elapsed);
-    const progress=Math.min(1,p.elapsed/config.reset);
+    const reset=deviceCooldown(state,config.reset);
+    p.resetRemaining=Math.max(0,reset-p.elapsed);
+    const progress=Math.min(1,p.elapsed/reset);
     p.angle=end+(start-end)*ease(progress);
     p.drumAngle=(p.drumAngle||0)+dt*config.drumSpeed;
     if(p.resetRemaining<=1e-8) {

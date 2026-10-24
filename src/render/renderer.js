@@ -28,7 +28,7 @@ export class Renderer {
     this.effects.update(dt);this.effects.ingest(state);this.visualTime+=dt;const c=this.c;
     if(this.effects.stop>0){c.drawImage(this.frame,0,0);return;}
     c.save();if(this.effects.shake>0){c.translate(Math.sin(this.visualTime*145)*this.effects.shake,Math.cos(this.visualTime*123)*this.effects.shake*.6);}
-    if(state.stageId==='frontier'&&!this.frontierTerrain)this.frontierTerrain=createFrontierTerrain(stageFor(state).map);
+    if(state.stageId==='frontier'&&this.frontierMap!==stageFor(state).map){this.frontierMap=stageFor(state).map;this.frontierTerrain=createFrontierTerrain(this.frontierMap);}
     c.drawImage(state.stageId==='frontier'?this.frontierTerrain:this.terrain,0,0);this.effects.ground(c);
     this.mapLabels(c,state);
     for(const r of state.rubble||[]){c.fillStyle='#55574b';for(let i=0;i<6;i++)c.fillRect((r.x+.15+(i%3)*.24)*TILE,(r.y+.2+Math.floor(i/3)*.32)*TILE,5,4);}
@@ -59,7 +59,7 @@ export class Renderer {
     if(state.phase==='siege'&&state.speed===0){c.fillStyle='#11202475';c.fillRect(0,0,1280,720);c.fillStyle='#f0dfac';c.font='24px Georgia';c.textAlign='center';c.fillText('PAUSED',640,70);c.font='12px system-ui';c.fillText('P TO RESUME',640,93);c.textAlign='left';}
     this.frame.getContext('2d').drawImage(this.canvas,0,0);
   }
-  mapLabels(c,state){c.save();if(state.stageId==='frontier'){c.font='italic 13px Georgia';c.fillStyle='#e7e2bca0';for(const d of stageFor(state).map.districts||[])c.fillText(d.name,d.x*TILE+4,d.y*TILE-9);c.fillStyle='#f3c38e';c.fillText('Raiders approach from the east ←',990,35);c.restore();return;}c.fillStyle='#c3c7ae77';c.font='10px system-ui';c.letterSpacing='2px';c.fillText('THE CANYON KEEP',1000,130);c.fillStyle='#c9ba9290';c.font='italic 13px Georgia';c.fillText('The western approach',85,100);c.restore();}
+  mapLabels(c,state){c.save();if(state.stageId==='frontier'){const map=stageFor(state).map;c.font='italic 13px Georgia';c.fillStyle='#e7e2bca0';for(const d of map.districts||[])c.fillText(d.name,d.x*TILE+4,d.y*TILE-9);const edges=[...new Set(map.spawns.map(p=>p.x===0?'west':p.x===63?'east':p.y===0?'north':'south'))];c.fillStyle='#f3c38e';c.textAlign='right';c.fillText(`Raiders approach: ${edges.join(' / ')}`,1250,35);c.restore();return;}c.fillStyle='#c3c7ae77';c.font='10px system-ui';c.letterSpacing='2px';c.fillText('THE CANYON KEEP',1000,130);c.fillStyle='#c9ba9290';c.font='italic 13px Georgia';c.fillText('The western approach',85,100);c.restore();}
   frontierProperties(c,state,ui){
     const hovered=ui.hover&&state.structures.find(s=>s.owner&&ui.hover.x>=s.x&&ui.hover.x<s.x+s.w&&ui.hover.y>=s.y&&ui.hover.y<s.y+s.h);
     c.save();for(const s of state.structures)if(s.owner){const x=s.x*TILE,y=s.y*TILE,w=s.w*TILE,h=s.h*TILE,selected=s.id===ui.requestBuildingId||s.id===(hovered?.id??ui.selectedStructureId),request=state.contract.requests.find(r=>r.buildingId===s.id),accepted=s.promise?.status==='accepted';
