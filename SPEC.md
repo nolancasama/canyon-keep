@@ -194,6 +194,8 @@ Rules:
   unit DPS against them. Explosions damage golems as exposed units.
   Golems crumble at 0 HP or after 30 s and clear on Continue/start/retry;
   unawakened walls and their damage persist normally. The pendulum is unchanged.
+  This one-shot golem is the canyon rule; Frontier golem walls are reusable
+  (see "Reusable golem walls" in §13).
 - Hover/selection shows tower range circle; selecting the pendulum tool shows
   all 3 sites with their full sweep zones; a placed pendulum always shows its
   zone faintly during siege.
@@ -581,6 +583,29 @@ first; nearby reachable combat prevents treatment. Death cannot be reversed,
 golems are ineligible, and destroyed keeps or depleted pools stop care.
 Recovery is latched until 85% HP (cavalry 80%), then units resume their role.
 Retry restores preparation and resets pools when the siege starts again.
+
+### Reusable golem walls (Frontier)
+
+A Frontier golem wall (240 HP, Structural bonus applies) is released by hand
+during battle (the battle panel's **Release** button) or wakes on its own when
+battle damage leaves a dormant wall at ≤ 50% HP. One wall never holds two
+golems. While its golem is out the wall stays in place as an open breach: it
+blocks nothing, takes no damage, cannot be repaired and refuses construction
+on its tile; enemy and friendly routes and archer battlements treat it as a
+gap. The golem's maximum HP is 160 and it starts at the wall's HP fraction.
+
+Each wall has a preparation mode, kept through retry. **Guard** stays within
+1.5 tiles of the breach and returns after 2 idle seconds. **Patrol** ranges 4
+tiles and returns after 4 idle seconds. Either returns after 20 active seconds
+or at ≤ 30% HP, walking a grid route over open ground (never through walls,
+gates or cliffs). It reforms only when no enemy, defender, civilian, golem or
+construction site is within 0.6 tiles of the breach; until then it waits and
+keeps slamming adjacent enemies. Reforming restores the wall at the golem's HP
+fraction (never more), plays a 0.5 s reform, then a 30 s reuse cooldown.
+Mechanical Engineering shortens that cooldown by 8/16/24% (levels 2–4) and
+speeds the return by 10/15% (levels 3–4). If the golem dies, the wall is
+destroyed and its breach stays open for the siege. Slam, knockback, stun,
+enemy targeting, explosions and bounties are the canyon golem's rules.
 
 Archer battlements are a separate 4-connected network of intact wall, gate,
 spiked, dormant-golem and integrated-tower tiles. Stairs are integrated towers,

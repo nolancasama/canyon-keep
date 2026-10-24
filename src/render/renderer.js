@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js';
 import { stageFor } from '../data/stages.js';
 import { launcherLane } from '../sim/mechanisms.js';
 import { wallNetwork } from '../sim/frontier/archers.js';
+import { golemReuseCooldown } from '../sim/frontier/golems.js';
 import { createTerrain, createFrontierTerrain, createFloorClip, TILE } from './terrain.js';
 import { Effects } from './effects.js';
 
@@ -36,7 +37,7 @@ export class Renderer {
     for(const m of state.attackMarkers||[]){line(c,m.x*TILE-5,m.y*TILE-5,m.x*TILE+5,m.y*TILE+5,'#b7624e99',2);line(c,m.x*TILE+5,m.y*TILE-5,m.x*TILE-5,m.y*TILE+5,'#b7624e99',2);}
     this.overlays(c,state,ui);
     for(const s of state.structures||[])if(!s.destroyed&&s.hp>0)this.structure(c,s,state);
-    if(state.stageId==='frontier'){for(const site of state.constructionSites||[])this.constructionSite(c,site);for(const s of state.structures)if(!s.destroyed&&s.hp>0&&s.emergencyRepair?.status==='repairing')this.repairProgress(c,s);}
+    if(state.stageId==='frontier'){for(const site of state.constructionSites||[])this.constructionSite(c,site);for(const s of state.structures)if(!s.destroyed&&s.hp>0&&s.emergencyRepair?.status==='repairing')this.repairProgress(c,s);for(const s of state.structures)if(s.type==='golem'&&!s.destroyed&&s.golemState&&s.golemState!=='dormant')this.golemStatus(c,s,state);for(const g of state.golems||[])if(g.frontier&&g.status==='active')this.golemBar(c,g);}
     if(state.stageId==='frontier'){this.frontierProperties(c,state,ui);if(state.phase==='prep')this.garrisonPreparation(c,state,ui);}
     this.mechanismLinks(c,state,ui);
     this.sweepWarnings(c,state,ui);
@@ -119,9 +120,30 @@ export class Renderer {
   }
   healingMarker(c,x,y){line(c,x-3,y,x+3,y,'#c7edab',2);line(c,x,y-3,x,y+3,'#c7edab',2);}
   guard(c,g){const x=g.x*TILE,y=g.y*TILE,militia=g.type==='militia',attacking=g.status==='engaging'||g.status==='attacking',swing=attacking?Math.sin(this.visualTime*10)*3:0;c.save();circle(c,x,y+2,7,'#263630');c.fillStyle=militia?'#b79a66':g.hired?'#b18c85':'#7da3ad';c.fillRect(x-4,y-3,8,10);circle(c,x,y-6,4,'#d8bc97');if(!militia)line(c,x-4,y-9,x+4,y-9,'#d2d8c0',3);line(c,x+7,y+5,x+7+swing,y-13,'#d2ceae',1.5);if(militia){line(c,x+4,y-10,x+10,y-10,'#dfcf96',1.5);line(c,x+4,y-10,x+4,y-14,'#dfcf96');line(c,x+10,y-10,x+10,y-14,'#dfcf96');}else{c.fillStyle=g.hired?'#935f55':'#5d7f8c';c.fillRect(x-8,y-1,5,8);}if(g.status==='retreating'){line(c,x-5,y+12,x,y+15,'#efc67c',1.5);line(c,x,y+15,x+5,y+12,'#efc67c',1.5);}if(g.hp<g.maxHp)bar(c,x,y-16,18,g.hp,g.maxHp);c.restore();}
+  // An open breach while the golem is out; a recharge ring while it reforms or cools down.
+  golemStatus(c,s,state){
+    const x=s.x*TILE,y=s.y*TILE,cx=x+TILE/2,cy=y+TILE/2;c.save();
+    if(s.awakened){
+      c.fillStyle='#1a1512d9';c.fillRect(x+2,y+2,TILE-4,TILE-4);
+      for(const [px,py,w,h]of [[1,1,5,4],[TILE-6,TILE-5,5,4],[1,TILE-5,4,4],[TILE-5,1,4,3]]){c.fillStyle='#6f7b70';c.fillRect(x+px,y+py,w,h);}
+      c.strokeStyle=`rgba(240,150,90,${.55+Math.sin(this.visualTime*5)*.3})`;c.setLineDash([3,2]);c.lineWidth=1.5;c.strokeRect(x+1,y+1,TILE-2,TILE-2);c.setLineDash([]);
+    } else {
+      const total=s.golemState==='reforming'?CONFIG.frontier.golem.reformTime:golemReuseCooldown(state),q=1-Math.min(1,(s.golemTimer||0)/total);
+      c.lineWidth=3;c.strokeStyle='#17292488';c.beginPath();c.arc(cx,cy,TILE*.42,0,TAU);c.stroke();
+      c.strokeStyle=s.golemState==='reforming'?'#e4f7ea':'#8bf1cc';c.beginPath();c.arc(cx,cy,TILE*.42,-Math.PI/2,-Math.PI/2+TAU*q);c.stroke();
+    }
+    c.restore();
+  }
+  golemBar(c,g){
+    const x=g.x*TILE,y=g.y*TILE-30,q=Math.max(0,g.hp/g.maxHp);c.save();
+    c.fillStyle='#14201dcc';c.fillRect(x-13,y-1,26,5);c.fillStyle=q>.5?'#8bf1cc':q>.25?'#e6c46c':'#e7765c';c.fillRect(x-12,y,24*q,3);
+    if(g.phase!=='fighting'){c.fillStyle='#d9f2e6';c.font='9px system-ui';c.textAlign='center';c.fillText(g.phase==='waiting'?'WAITING':'RETURNING',x,y-3);}
+    c.restore();
+  }
   repairProgress(c,s){const x=(s.x+.5)*TILE,y=(s.y+.5)*TILE,r=s.emergencyRepair,q=Math.min(1,r.restored/r.amount);c.save();c.strokeStyle='#183938';c.lineWidth=4;c.beginPath();c.arc(x,y,12,0,TAU);c.stroke();c.strokeStyle='#8de3e3';c.lineWidth=2.5;c.beginPath();c.arc(x,y,12,-Math.PI/2,-Math.PI/2+q*TAU);c.stroke();line(c,x-3,y,x+3,y,'#d4ffff',2);line(c,x,y-3,x,y+3,'#d4ffff',2);c.restore();}
   constructionSite(c,site){const x=(site.x+.5)*TILE,y=(site.y+.5)*TILE,q=Math.min(1,(site.elapsed||0)/(site.duration||CONFIG.frontier.buildTime)),waiting=site.status!=='building';c.save();c.fillStyle='#d9bf6630';c.fillRect(site.x*TILE+1,site.y*TILE+1,(site.w||1)*TILE-2,(site.h||1)*TILE-2);c.strokeStyle=waiting?'#ef9d6f':'#e6d18f';c.setLineDash([3,3]);c.strokeRect(site.x*TILE+1,site.y*TILE+1,(site.w||1)*TILE-2,(site.h||1)*TILE-2);c.setLineDash([]);line(c,x-5,y+4,x+5,y-4,'#b99a6a',3);c.strokeStyle='#283a35';c.lineWidth=3;c.beginPath();c.arc(x,y,8,0,TAU);c.stroke();c.strokeStyle=waiting?'#f4a478':'#f4d98e';c.beginPath();c.arc(x,y,8,-Math.PI/2,-Math.PI/2+q*TAU);c.stroke();if(waiting){c.fillStyle='#f4d98e';c.font='bold 10px system-ui';c.textAlign='center';c.fillText('Ⅱ',x,y+4);}c.restore();}
   structure(c,s,state){
+    if(s.type==='golem'&&s.awakened)return; // golemStatus draws the open breach
     const x=s.x*TILE,y=s.y*TILE,w=(s.w||1)*TILE,h=(s.h||1)*TILE,health=s.hp/s.maxHp;
     if(s.type==='caltrops'){c.fillStyle='#35463355';c.fillRect(x+1,y+1,w-2,h-2);for(const [dx,dy]of [[5,5],[14,6],[9,13],[16,16]]){line(c,x+dx-3,y+dy+2,x+dx+3,y+dy-2,'#28342e',2.5);line(c,x+dx-2,y+dy-2,x+dx+2,y+dy+2,'#d2d1b1',1.5);line(c,x+dx,y+dy,x+dx,y+dy-4,'#e5dcb7',1);}return;}
     if(s.type==='sensor'){c.save();circle(c,x+10,y+10,7,'#2c403d');c.strokeStyle='#9eab8a';c.lineWidth=1.5;c.beginPath();c.arc(x+10,y+10,5.5,0,TAU);c.stroke();for(let i=0;i<4;i++){const a=i*TAU/4;line(c,x+10+Math.cos(a)*4,y+10+Math.sin(a)*4,x+10+Math.cos(a)*8,y+10+Math.sin(a)*8,'#c3ac70',2);}circle(c,x+10,y+10,2.4,s.flashRemaining>0?'#fff4b6':s.pending!=null?'#e9c06b':s.cooldown>0?'#747f71':'#abd9ba');c.restore();return;}
@@ -164,7 +186,7 @@ export class Renderer {
     if(health<.95){c.strokeStyle=health<.3?'#453b31':'#62624f';c.lineWidth=health<.3?2:1.3;c.beginPath();c.moveTo(x+w*.35,y+2);c.lineTo(x+w*.5,y+h*.4);c.lineTo(x+w*.33,y+h*.6);c.lineTo(x+w*.55,y+h-2);c.stroke();if(health<.3){line(c,x+w*.1,y+h*.6,x+w*.8,y+h*.2,'#50483a',2);c.fillStyle='#68614a';c.fillRect(x+w-7,y+h-6,7,6);}bar(c,x+w/2,y-10,Math.max(20,w),s.hp,s.maxHp);}
   }
   inhabitant(c,h,state){const x=h.x*TILE,y=h.y*TILE,bob=Math.sin(this.visualTime*3+Number(h.id||0))*.6;c.fillStyle='#24332b55';c.beginPath();c.ellipse(x+1,y+7,7,3,0,0,TAU);c.fill();circle(c,x,y+1+bob,7,'#202a29');circle(c,x,y+1+bob,5.5,['#698e99','#c2a16d','#7b9876'][Math.abs(Number(h.id)||0)%3]);circle(c,x,y-5+bob,4.7,'#202a29');circle(c,x,y-5+bob,3.2,'#e3c3a0');}
-  golem(c,g,state){const x=g.x*TILE,y=g.y*TILE,bob=g.status==='moving'?Math.sin((state.time??0)*7)*1.2:0;c.save();c.translate(x,y+bob);c.globalAlpha=Math.min(1,(g.remaining??1)*2);c.fillStyle='#17292477';c.beginPath();c.ellipse(2,10,15,7,0,0,TAU);c.fill();for(const [px,py,w,h]of [[-10,3,8,10],[3,3,8,10],[-11,-12,22,20],[-18,-9,8,17],[11,-9,8,17],[-8,-20,16,13]]){c.fillStyle='#253d38';c.fillRect(px-1,py-1,w+2,h+2);c.fillStyle='#8d9c86';c.fillRect(px,py,w,h);c.fillStyle='#bdc4a5';c.fillRect(px,py,w,3);}line(c,-7,-7,0,-3,'#4b6356',2);line(c,0,-3,-3,5,'#4b6356',2);line(c,0,-3,7,-6,'#4b6356',2);c.shadowBlur=6;c.shadowColor='#8bf1cc';line(c,-5,-15,-2,-15,'#b9ffde',2);line(c,2,-15,5,-15,'#b9ffde',2);line(c,-2,-5,0,-7,'#9ce4bc',1);line(c,0,-7,2,-5,'#9ce4bc',1);c.shadowBlur=0;bar(c,0,-28,29,g.hp,g.maxHp);c.restore();}
+  golem(c,g,state){const x=g.x*TILE,y=g.y*TILE,bob=g.status==='moving'?Math.sin((state.time??0)*7)*1.2:0;c.save();c.translate(x,y+bob);c.globalAlpha=g.frontier?1:Math.min(1,(g.remaining??1)*2);c.fillStyle='#17292477';c.beginPath();c.ellipse(2,10,15,7,0,0,TAU);c.fill();for(const [px,py,w,h]of [[-10,3,8,10],[3,3,8,10],[-11,-12,22,20],[-18,-9,8,17],[11,-9,8,17],[-8,-20,16,13]]){c.fillStyle='#253d38';c.fillRect(px-1,py-1,w+2,h+2);c.fillStyle='#8d9c86';c.fillRect(px,py,w,h);c.fillStyle='#bdc4a5';c.fillRect(px,py,w,3);}line(c,-7,-7,0,-3,'#4b6356',2);line(c,0,-3,-3,5,'#4b6356',2);line(c,0,-3,7,-6,'#4b6356',2);c.shadowBlur=6;c.shadowColor='#8bf1cc';line(c,-5,-15,-2,-15,'#b9ffde',2);line(c,2,-15,5,-15,'#b9ffde',2);line(c,-2,-5,0,-7,'#9ce4bc',1);line(c,0,-7,2,-5,'#9ce4bc',1);c.shadowBlur=0;bar(c,0,-28,29,g.hp,g.maxHp);c.restore();}
   enemy(c,e,state){
     const x=e.x*TILE,y=e.y*TILE,t=state.time??0;
     if(e.type==='boss'){

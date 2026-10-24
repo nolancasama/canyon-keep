@@ -12,6 +12,7 @@ import { initializeFrontier, respondToRequest, finalizeContract } from './fronti
 import { requestGuards, guardPosts } from './frontier/npcs.js';
 import { startFrontierConstruction, placeEmergency } from './frontier/construction.js';
 import { emergencyRepairCheck, startEmergencyRepair, cancelEmergencyRepair } from './frontier/repair.js';
+import { releaseGolem, setGolemMode } from './frontier/golems.js';
 import { frontierSeed } from './frontier/generator.js';
 import { advancedScoutingStatus, purchaseAdvancedScouting, scoutingReport } from './frontier/fronts.js';
 
@@ -105,6 +106,8 @@ export function createGame(seed = CONFIG.seed) {
     placeEmergency: (type,x,y) => placeEmergency(state,type,x,y),
     emergencyRepair: (x,y) => startEmergencyRepair(state,x,y),
     previewEmergencyRepair: (x,y) => emergencyRepairCheck(state,x,y),
+    releaseGolem: id => releaseGolem(state,id),
+    setGolemMode: (id,mode) => setGolemMode(state,id,mode),
     cancelEmergencyRepair: (x,y) => cancelEmergencyRepair(state,x,y),
     openBriefing() {
       if(!state.contract) return false;

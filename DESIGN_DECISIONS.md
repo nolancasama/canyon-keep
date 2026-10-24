@@ -1025,3 +1025,31 @@ Golems (Frontier)
   Rejected: caching failed routes per enemy (enemies move every tick).
 - A brute already in its slam windup completes the slam rather than switching
   to a nearby defender; the slam is its area threat to archers and cavalry.
+
+## 2026-10-25 — Phase E: reusable Frontier golem walls (controller)
+
+- Implemented by the controller after Codex reached its usage limit.
+- **The wall stays in `state.structures` while its golem is out**, flagged
+  `awakened`; `blocksStructure` treats it as open. Pathing, emergency repair,
+  archer battlements and damage all see a gap, while the occupied tile still
+  refuses construction. Rejected: splicing the wall out and re-inserting it on
+  reform (canyon's approach), which loses mode, ids and links on retry and
+  would let construction claim the breach.
+- The golem keeps `status:'active'` for its whole sortie (fighting, returning,
+  waiting) so existing enemy targeting, explosions and occupancy checks apply
+  unchanged; a separate `phase` drives the return.
+- Returning uses a grid BFS over open, non-blocking tiles; the chase step is
+  unchanged. With no route the golem stays and fights, retrying every 0.5 s.
+- Obstructed breaches have no timeout: the golem waits and keeps slamming
+  (frozen decision). Reform needs ≥ 1 HP on the wall.
+- Auto-awakening is blocked while reforming/cooling; damage then hits the
+  wall normally and can destroy it. A lethal hit on a dormant wall destroys it
+  rather than releasing a 0-HP golem.
+- Battle UI lists golem walls with state, HP, timer and a Release button;
+  battle clicks on the map stay reserved for emergency tools.
+- Battle HUD shows **spendable** gold (client emergency allowance left plus
+  unspent bounty), not the client's whole remaining budget, which overstated
+  what could be spent by thousands.
+- Balance probe (seed 1, weighted towers + two golem walls, release at
+  3 tiles): compact/outpost victories with 1 release, 1 reform and golem slams
+  each; twin saw no contact at those walls. All three were victories.

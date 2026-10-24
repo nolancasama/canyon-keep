@@ -1,7 +1,25 @@
 # Current State
 
 ## Status
-Frontier geometry budgets and optional 50 G advanced scouting are implemented.
+**Fortress Engineer & Garrison update (2026-10-25), Phases A–E committed.**
+All Frontier-only; canyon campaign behaviour and balance unchanged.
+- A: kill bounties are spendable immediately (client funds first, up to the
+  120 G emergency allowance, then uncapped bounty), source-separated ledger,
+  final pay counts only unspent bounty; gates 130 HP; wall lines auto-insert
+  gates on major roads; emergency repair (25%/siege, 3 s damage-free, pay per
+  HP at 1.5×, interrupted by hits); per-type breach weights.
+- B: engineer creation (name, 6 portraits, accents, presets, 3 points ≤ 3),
+  legacy career migration, history and reputation.
+- C/D: seeded garrisons (footmen/archers/cavalry, any subset) with briefing
+  rosters; keep infirmaries (2 patients, 3 HP/s, 120 HP pool); wall archers on
+  a battlement network; cavalry gate sorties with retreat and stranding.
+- E: reusable golem walls — manual/auto release, Guard/Patrol, proportional HP,
+  BFS return, occupancy-safe reform, 30 s Mechanical-scaled cooldown.
+Details and values: DESIGN_DECISIONS.md 2026-10-25 entries; rules in SPEC §13.
+Browser smoke at 1366×768 covered creation, briefing roster, golem prep panel,
+golem release/reform and a twin battle HUD; no human playtest yet.
+
+Earlier: Frontier geometry budgets and optional 50 G advanced scouting are implemented.
 Principal enclosure estimates now fund generated contracts; the handcrafted
 treasury is 1950 G (main curtain 1560 G, combined estimates 4200 G). Preparation
 shows an advisory budget block. Purchased scouting reports real front strength,
@@ -25,9 +43,7 @@ aesthetic judgment have not been performed.
 
 Fortress Engineer milestones 1–4 implemented: bounties, settlement growth,
 spiked/golem walls, trigger mechanisms, scout intel, impact feedback and balance fixtures,
-on the playable three-siege prototype. Headless validation passes;
-controller behavioral acceptance and aesthetic review of this update are pending.
-Work remains uncommitted. Controller behavioral acceptance is not performed here.
+on the playable three-siege prototype. Headless validation passes.
 
 ## Run
 Run `npm start`, then open http://localhost:5180 (or use `start.bat`).
@@ -459,7 +475,18 @@ No browser suites, controller acceptance checks or screenshots were run/produced
 UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 
 ## Known Issues / Next Steps
-- No known failing headless checks remain: latest `npm test` is 194/194.
+- Latest `npm test`: 265/265 (~5 min; was 194 tests / 3.4 min before the
+  garrison update — the 96-contract budget sweep dominates).
+- Garrison update playtest questions: are archer battlements discoverable
+  (they need towers, gate-flanking walls or walls touching the keep)? Do
+  cavalry sorties read clearly, and is a cavalry-only town fun? Is 120 G of
+  client emergency allowance plus bounty enough to make emergency
+  construction/repair matter? Is Guard golem reach (1.5 tiles) too short to
+  matter outside wall assaults?
+- Known limits: golems cannot pass gates on their way home (gates block them
+  like enemies); the handcrafted contract keeps a fixed 4-footman garrison;
+  creation screen and golem UI were screenshot-checked but not human-played.
+- No Codex/delegated work is in flight.
   Current budget/scouting UI has no captured visual evidence; 1366×768 layout,
   markers, human playtesting and Claude's aesthetic review remain pending.
   Controller behavioral

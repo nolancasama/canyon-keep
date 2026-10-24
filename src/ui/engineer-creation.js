@@ -11,7 +11,7 @@ export function skillDescriptions(skills) {
     communication:`Negotiation level ${effects.communication}: eligible requests pay +${percent(rules.negotiationMultiplier-1)}%. Reassign up to ${effects.guardLimit} keep guards. Request owner defenses at any level; higher-level requests offer optional rewards.`,
     structural:`+${percent(effects.structuralHpBonus)}% player Class A max HP. Levels 2–4: ${[2,3,4].map(l=>percent(skillEffects({structural:l}).structuralHpBonus)+'%').join(' / ')}. Property and makeshift works are unaffected.`,
     field:`Emergency build ${effects.emergencyBuildTime.toFixed(1)} s; repair time ×${rules.repair.fieldMultipliers[level-1]} (${(rules.repair.duration*rules.repair.fieldMultipliers[level-1]).toFixed(2)} s). Build L1–4: ${[1,2,3,4].map(field=>skillEffects({field}).emergencyBuildTime.toFixed(1)).join(' / ')} s.`,
-    mechanical:`−${percent(effects.cooldownReduction)}% trap reset, launcher, retractable wall and pendulum cooldowns. Levels 2–4: ${[2,3,4].map(mechanical=>percent(skillEffects({mechanical}).cooldownReduction)+'%').join(' / ')}. Planned golem: −${percent(effects.cooldownReduction)}% cooldown, +${percent(rules.skills.plannedGolemReturnBonus[skills.mechanical-1])}% return speed (deferred).`,
+    mechanical:`−${percent(effects.cooldownReduction)}% trap reset, launcher, retractable wall and pendulum cooldowns. Levels 2–4: ${[2,3,4].map(mechanical=>percent(skillEffects({mechanical}).cooldownReduction)+'%').join(' / ')}. Golems: −${percent(effects.cooldownReduction)}% reuse cooldown, +${percent(rules.skills.golemReturnBonus[skills.mechanical-1])}% return speed.`,
   };
 }
 

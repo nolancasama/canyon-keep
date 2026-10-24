@@ -84,6 +84,11 @@ export const CONFIG = {
       archetypeBudget: { compact: 1, twin: 0.85, outpost: 0.9 },
       typeWeights: { footmen: 1, archers: 1, cavalry: 0.65 }, poorCavalryWeight: 0.25,
       poorThreshold: 0.9, subsetChance: 0.5 },
+    // Reusable golem walls. HP fraction carries across forms; the canyon keeps
+    // the one-shot CONFIG.golem behaviour.
+    golem: { activeHp: 160, guardLeash: 1.5, patrolLeash: 4, activeDuration: 20, cooldown: 30,
+      idleReturn: { guard: 2, patrol: 4 }, returnHpFraction: 0.3, occupancyRadius: 0.6,
+      reformTime: 0.5, repathInterval: 0.5 },
     infirmary: { patients: 2, rate: 3, pool: 120, retreatFraction: 0.3, recoverFraction: 0.85,
       combatRadius: 1, retryInterval: 1 },
     archers: { hp: 60, speed: 1.8, range: 5, damage: 6, interval: 1.4, projectileSpeed: 18,
@@ -106,8 +111,8 @@ export const CONFIG = {
     skills: { starter: { communication: 2, structural: 1, field: 1, mechanical: 1 }, max: 4,
       structuralHpPerLevel: 0.05, mechanicalCooldownPerLevel: 0.08, minBuildTime: 1.1,
       creationPoints: 3, creationMax: 3,
-      // Frozen future golem return bonuses, shown as deferred in creation only.
-      plannedGolemReturnBonus: [0, 0, 0.1, 0.15],
+      // Mechanical return-speed bonus for reusable Frontier golems, by level.
+      golemReturnBonus: [0, 0, 0.1, 0.15],
       reputationScores: { 'Exceptional Engineering': 4, 'Strong Defense': 3, 'Acceptable Defense': 2, 'Costly Victory': 1, 'Contract Failed': 0 },
       completionPoints: 1, exceptionalPoints: 2 },
     generator: { maxAttempts: 8, objectiveSpawnDistance: 7, minDefensiveTiles: 12,

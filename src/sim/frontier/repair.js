@@ -9,7 +9,7 @@ const failure=reason=>({ok:false,valid:false,reason:`Cannot repair — ${reason}
 const eligible=structure=>structure&&!structure.destroyed&&structure.hp>0&&
   Number.isFinite(structure.maxHp)&&structure.maxHp>0&&CLASS_A.includes(structure.type)&&
   CONFIG.structures[structure.type]?.military&&!structure.owner&&!structure.npcOwned&&
-  !structure.enemy&&!structure.emergency;
+  !structure.enemy&&!structure.emergency&&!(structure.type==='golem'&&structure.awakened);
 const targetAt=(state,x,y)=>{
   const contains=s=>x>=s.x&&y>=s.y&&x<s.x+s.w&&y<s.y+s.h;
   return state.structures.find(s=>!s.destroyed&&s.hp>0&&contains(s))??state.structures.find(contains);

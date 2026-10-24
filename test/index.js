@@ -21,6 +21,7 @@ import './frontier-gates.test.js';
 import './frontier-infirmary.test.js';
 import './frontier-archers.test.js';
 import './frontier-cavalry.test.js';
+import './frontier-golems.test.js';
 import './frontier-generator.test.js';
 import './frontier-skills.test.js';
 import './frontier-career.test.js';

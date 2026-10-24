@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js';
 import { rebuildFlow } from './pathing.js';
 import { stageFor } from '../data/stages.js';
 import { noteEnemyStructureDamage } from './frontier/repair.js';
+import { awakenFrontierGolem, frontierGolemDied } from './frontier/golems.js';
 
 export function inBounds(x, y) {
   return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
@@ -19,7 +20,8 @@ export function structureAt(state, x, y) {
 // Occupancy and blocking are distinct: tools still select walkable mechanisms.
 export function blocksStructure(structure) {
   return !!structure && CONFIG.structures[structure.type]?.blocks !== false &&
-    (!CONFIG.structures[structure.type]?.retracts || structure.status === 'raised');
+    (!CONFIG.structures[structure.type]?.retracts || structure.status === 'raised') &&
+    !(structure.type === 'golem' && structure.awakened);
 }
 
 export function blockingAt(state, x, y) { return blocksStructure(structureAt(state, x, y)); }
@@ -38,13 +40,18 @@ export function damageStructure(state, structure, damage, source = 'environment'
   const hpBefore=structure.hp;
   structure.hp = Math.max(0, structure.hp - damage);
   if(structure.hp<hpBefore&&source==='enemy'&&state.stageId==='frontier'&&state.phase==='siege') noteEnemyStructureDamage(state,structure);
-  if(state.stageId==='frontier'&&state.phase==='siege'&&
-    (structure.hp<=0||(structure.type==='golem'&&structure.hp<=structure.maxHp*CONFIG.golem.awakenFraction))&&
+  if(state.stageId==='frontier'&&state.phase==='siege'&&structure.hp<=0&&
     ['wall','gate','tower','spiked','golem','launcher','sensor','retractable','pendulum'].includes(structure.type)) {
     for(let y=structure.y;y<structure.y+structure.h;y++) for(let x=structure.x;x<structure.x+structure.w;x++)
       (state.destroyedClassATiles??=[]).push({x,y});
   }
-  if (state.phase === 'siege' && structure.type === 'golem' && structure.hp <= structure.maxHp * CONFIG.golem.awakenFraction) {
+  // Frontier golem walls are reusable: a dormant wall at or below the threshold
+  // releases its golem; cooling or fully destroyed walls fall through.
+  if (state.stageId === 'frontier' && state.phase === 'siege' && structure.type === 'golem') {
+    if (structure.hp > 0 && structure.hp <= structure.maxHp * CONFIG.golem.awakenFraction &&
+      (structure.golemState ?? 'dormant') === 'dormant' && awakenFrontierGolem(state, structure, 'damage')) return true;
+    if (structure.hp <= 0) structure.golemState = 'destroyed';
+  } else if (state.phase === 'siege' && structure.type === 'golem' && structure.hp <= structure.maxHp * CONFIG.golem.awakenFraction) {
     const x = structure.x + .5, y = structure.y + .5;
     structure.awakened = true;
     structure.destroyed = true;
@@ -78,5 +85,6 @@ export function damageGolem(state, golem, damage) {
   if (golem.hp > 0) return false;
   golem.status = 'crumbled';
   emit(state, 'golemCrumble', { id: golem.id, x: golem.x, y: golem.y });
+  if (golem.frontier) frontierGolemDied(state, golem);
   return true;
 }
