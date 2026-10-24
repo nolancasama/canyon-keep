@@ -20,6 +20,7 @@ import './frontier-repair.test.js';
 import './frontier-gates.test.js';
 import './frontier-generator.test.js';
 import './frontier-skills.test.js';
+import './frontier-career.test.js';
 import './frontier-balance.test.js';
 import './frontier-fronts.test.js';
 import './frontier-budget.test.js';

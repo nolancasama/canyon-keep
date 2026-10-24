@@ -504,7 +504,7 @@ mandatory keep objective, assessed property at risk, fee, bonuses and damage
 rule. Data-backed scouts give approximate forces, directions and district risks
 without arrival times. Building requests offer Promise, Decline, Ask more
 (Communication gate, deterministic +50% reward), or Defend it yourselves.
-Communication starts at 2; at least one request requires 3. The journal records
+Communication is chosen at engineer creation; at least one request requires 3. The journal records
 choices, locations, rewards and survival conditions. Workshop funds are a
 conditional immediate owner advance recorded separately from construction money;
 final settlement reconciles it with the survival condition. Earnings do not
@@ -640,19 +640,38 @@ construction/HUD/key hints hidden.
 
 ### Engineering skills and career
 
-Four skills start at Communication 2, Structural 1, Field 1, Mechanical 1,
-with a maximum of 4. Communication gates negotiation and existing guard
+New Frontier careers begin with a one-time engineer creation screen: a trimmed
+1–24 character name (default Rowan Stone), six procedural cosmetic portraits
+and six colour accents. All four skills begin at 1 with exactly three free
+points, and no skill above 3 at creation. Editable presets are Diplomat
+C3 S1 F2 M1, Fortress Expert C1 S3 F2 M1, Field Engineer C2 S1 F3 M1 and
+Mechanist C1 S2 F1 M3. Review and charter confirmation precede acceptance;
+cancelling preserves the previous career. Level 4 requires development points.
+Communication gates negotiation and existing guard
 reassignment. Structural adds 5% Class A maximum HP per level above 1.
 Field subtracts 0.3 seconds from emergency build time per extra level,
-with a floor of 0.8 seconds. Mechanical subtracts 8% of base sensor,
+with a floor of 1.1 seconds (L1–4: 2.0/1.7/1.4/1.1 seconds).
+Field repair multipliers remain 1.0/0.85/0.7/0.55. Mechanical subtracts 8% of base sensor,
 launcher, retractable and pendulum cooldowns per extra level. These effects
 apply only to Frontier and never bypass placement rules. Prep lists each
 level and its current numeric effect; skills enter the sim as copied data.
 
 A fulfilled contract grants one development point, or two for Exceptional
 Engineering; failure grants none. Spending on the title/contract screen adds
-one level for one point. The UI owns `{skills, points, contractsCompleted}`,
-optional localStorage access under try/catch, and Reset career. A UI contract
+one level for one point. The UI owns `{identity: {name, portrait, accent}, skills,
+points, contractsCompleted, history, reputation}` with optional localStorage
+access under try/catch and the existing `canyon-keep.frontier-career.v1` key.
+The last 20 contract records contain seed, archetype, rating and finalEarnings.
+Reputation averages the last 10 rating scores: Failed 0, Costly 1, Acceptable 2,
+Strong 3, Exceptional 4. The title career panel shows identity, reputation and
+history; these never fund construction. A failed session enters history once;
+a successful retry replaces its failed entry and awards progression once.
+Existing v1 skills/points/completion counts are preserved. Any points, completed
+contracts, or skills different from the old C2 S1 F1 M1 default mean an
+established career requiring identity only. An untouched old default requires
+full creation. Explicit New career replaces all progression only after charter
+confirmation, invalidates prior award tokens and never adds starting points to
+existing progress. A UI contract
 session ledger survives siege retries, so the same siege cannot award twice.
 Storage failure leaves the full game playable with an in-memory career.
 

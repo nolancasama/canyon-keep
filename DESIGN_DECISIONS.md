@@ -1,5 +1,29 @@
 # Design Decisions
 
+## 2026-10-25 — Frontier Commission Phase B implementation notes
+
+- Creation runs before the first Frontier contract, with identity-only migration
+  for established v1 careers. New career is a draft until charter confirmation;
+  cancel preserves the old record. Confirmation replaces progression and clears
+  old session tokens. The storage key and legacy starter fallback remain unchanged.
+- Six CSS portraits and six accents are cosmetic. Names trim to 24 characters
+  and default to Rowan Stone. Presets remain editable; exact allocation is also
+  validated in the career controller. Layout uses two columns with a bounded
+  scrolling fallback for short windows. Final aesthetics remain Claude's review.
+- Rating score mapping is Failed 0, Costly 1, Acceptable 2, Strong 3,
+  Exceptional 4. History includes failures without progression awards. A successful
+  retry replaces that session's failed entry; awarded sessions cannot change
+  history or grant more points. History retains 20 entries; reputation averages
+  the last 10. Historical v1 completions cannot reconstruct missing history.
+- Skill descriptions read CONFIG and skillEffects. Field's existing 0.3-second
+  reduction now has the explicit 1.1-second floor. Repair multipliers, economy
+  and gates are unchanged. Frozen golem cooldown/return bonuses are shown as
+  planned and deferred; only the return-bonus presentation data was added,
+  with no golem behavior or other later-phase implementation.
+- Final `npm test`: 227 passed, 0 failed, including creation flow, legacy
+  migration, allocation, persistence, reset, retry history and reputation checks.
+  No browser suite, screenshots or final aesthetic review were performed.
+
 ## 2026-10-24 — Geometry budgets and purchased advanced scouting
 
 - Replace generated value/raider-based 600–950 G budgets with estimated basic

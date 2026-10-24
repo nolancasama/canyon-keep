@@ -89,7 +89,11 @@ export const CONFIG = {
       priceMultiplier: 1.5, fieldMultipliers: [1, 0.85, 0.7, 0.55] },
     starterField: 1, enemyBuildClearance: 1,
     skills: { starter: { communication: 2, structural: 1, field: 1, mechanical: 1 }, max: 4,
-      structuralHpPerLevel: 0.05, mechanicalCooldownPerLevel: 0.08, minBuildTime: 0.8,
+      structuralHpPerLevel: 0.05, mechanicalCooldownPerLevel: 0.08, minBuildTime: 1.1,
+      creationPoints: 3, creationMax: 3,
+      // Frozen future golem return bonuses, shown as deferred in creation only.
+      plannedGolemReturnBonus: [0, 0, 0.1, 0.15],
+      reputationScores: { 'Exceptional Engineering': 4, 'Strong Defense': 3, 'Acceptable Defense': 2, 'Costly Victory': 1, 'Contract Failed': 0 },
       completionPoints: 1, exceptionalPoints: 2 },
     generator: { maxAttempts: 8, objectiveSpawnDistance: 7, minDefensiveTiles: 12,
       minDistrictValue: 300,

@@ -2,8 +2,9 @@ import { CONFIG } from '../config.js';
 import { SITES } from '../data/map.js';
 import { siegeName } from '../sim/siege.js';
 import { stageFor } from '../data/stages.js';
-import { SKILLS, normalizeSkills, skillEffects, classAMaxHp } from '../sim/frontier/skills.js';
-import { createCareerController } from './frontier-career.js';
+import { SKILLS, normalizeSkills, classAMaxHp } from '../sim/frontier/skills.js';
+import { createCareerController, CREATION_PRESETS, ACCENTS, normalizeIdentity, validateCreationSkills } from './frontier-career.js';
+import { newCreationDraft, creationMarkup, portraitMarkup, skillDescriptions } from './engineer-creation.js';
 import { FRONTIER_ARCHETYPES } from '../data/frontier/templates.js';
 import { frontierSeed } from '../sim/frontier/generator.js';
 
@@ -51,6 +52,7 @@ export class Interface {
     this.el.actions.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;this.unlock();this.action(b.dataset.action,b.dataset.speed);});
     this.el.results.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b){this.unlock();this.action(b.dataset.action);}});
     this.el.results.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('[data-contract-seed]')){e.preventDefault();this.action('playSeed');}});
+    this.el.results.addEventListener('input',e=>{if(this.creation&&e.target.matches('[data-engineer-name]'))this.creation.identity.name=e.target.value;});
     this.el.mute.addEventListener('click',()=>{this.unlock();this.toggleMute();});
     canvas.addEventListener('pointermove',e=>{this.hover=this.coordinates(e);this.preview();});
     canvas.addEventListener('pointerleave',()=>{if(!this.drag){this.hover=null;this.previewCells=[];}});
@@ -72,7 +74,29 @@ export class Interface {
     this.observeCareer();
     if(state.phase==='title'){this.seedText=this.el.results.querySelector('[data-contract-seed]')?.value??this.seedText;this.archetypeChoice=this.el.results.querySelector('[data-contract-archetype]')?.value??this.archetypeChoice;}
     if(action?.startsWith('skill:')&&state.phase==='title'){result=this.career.spend(action.slice(6));if(result.reason)this.notify(result.reason);this.refresh();return;}
-    if(action==='resetCareer'&&state.phase==='title'){this.career.reset();this.refresh();return;}
+    if(state.phase==='title'&&this.creation){
+      const draft=this.creation;
+      draft.dirty=true;
+      if(action==='creationCancel'){this.creation=null;this.pendingFrontier=null;}
+      if(action==='creationBack')draft.confirm=false;
+      if(action?.startsWith('portrait:'))draft.identity.portrait=Number(action.split(':')[1]);
+      if(action?.startsWith('accent:'))draft.identity.accent=ACCENTS[Number(action.split(':')[1])];
+      if(action?.startsWith('preset:')&&!draft.legacy)draft.skills={...CREATION_PRESETS[Number(action.split(':')[1])].skills};
+      if(action?.startsWith('allocate:')&&!draft.legacy){const [,key,delta]=action.split(':'),next={...draft.skills,[key]:draft.skills[key]+Number(delta)};
+        if(SKILLS.includes(key)&&next[key]>=1&&next[key]<=CONFIG.frontier.skills.creationMax&&SKILLS.reduce((sum,k)=>sum+next[k]-1,0)<=CONFIG.frontier.skills.creationPoints)draft.skills=next;}
+      if(action==='creationReview'&&(draft.legacy||validateCreationSkills(draft.skills).ok)){draft.identity=normalizeIdentity(draft.identity);draft.confirm=true;}
+      if(action==='creationConfirm'&&draft.confirm){
+        const created=draft.legacy?this.career.identify(draft.identity):this.career.create(draft);
+        if(created.ok){const pending=this.pendingFrontier;this.creation=null;this.pendingFrontier=null;this.refresh();if(pending)this.action(pending);return;}
+      }
+      this.refresh();return;
+    }
+    if(action==='resetCareer'&&state.phase==='title'){
+      this.creation=newCreationDraft(this.career.record);this.pendingFrontier=null;this.refresh();return;
+    }
+    if(['stageFrontier','generateFrontier','playSeed','replayFrontier'].includes(action)&&(this.career.needsCreation||this.career.needsIdentity)){
+      this.creation=newCreationDraft(this.career.record,this.career.needsIdentity);this.pendingFrontier=action;this.refresh();return;
+    }
     if(['briefing','journal','scoutReport','start','retry','title','stageCanyon','stageFrontier','generateFrontier','playSeed','replayFrontier'].includes(action))this.guardsOpen=false;
     if(['stageCanyon','stageFrontier','generateFrontier','playSeed','replayFrontier','title'].includes(action)){
       if(action==='title')api.returnToTitle();
@@ -189,19 +213,26 @@ export class Interface {
     const state=this.game.state;if(!frontier(state))return;
     const session=this.game.api.frontierSession();
     if(session!==this.contractSession){this.contractSession=session;this.careerToken=this.career.beginContract();this.developmentAward=0;this.lastContract={generated:state.contract.generated,seed:state.contract.seed,archetype:state.contract.archetype};this.seedText=String(state.contract.seed);}
-    const award=this.career.award(state.results,this.careerToken);if(award.awarded)this.developmentAward=award.points;
+    const award=this.career.award(state.results,this.careerToken,{seed:state.contract.seed,archetype:state.contract.archetype});if(award.awarded)this.developmentAward=award.points;
   }
   skillsPanel(skills,spend=false){
-    const levels=normalizeSkills(skills),effects=skillEffects(levels),record=this.career.record;
-    const labels={communication:'Communication',structural:'Structural',field:'Field',mechanical:'Mechanical'},descriptions={communication:`Negotiate at level ${effects.communication}; reassign up to ${effects.guardLimit} guards`,structural:`+${Math.round(effects.structuralHpBonus*100)}% Class A max HP`,field:`${effects.emergencyBuildTime.toFixed(1)} s emergency builds`,mechanical:`−${Math.round(effects.cooldownReduction*100)}% sensor / launcher / retractable / pendulum cooldown`};
+    const levels=normalizeSkills(skills),record=this.career.record;
+    const labels={communication:'Communication',structural:'Structural',field:'Field',mechanical:'Mechanical'},descriptions=skillDescriptions(levels);
     // In-game sidebar: one line, details on hover, so the palette accordion keeps its 1366x768 height.
     if(!spend){const short={communication:'Comm',structural:'Struct',field:'Field',mechanical:'Mech'};return `<div class="skills-compact" title="${escapeText(SKILLS.map(key=>`${labels[key]} ${levels[key]}: ${descriptions[key]}`).join('\n'))}"><span>SKILLS</span> ${SKILLS.map(key=>`${short[key]} <b>${levels[key]}</b>`).join(' · ')}</div>`;}
-    return `<div class="skills-heading">ENGINEERING SKILLS${spend?` <span>${record.points} development point${record.points===1?'':'s'}</span>`:''}</div>${SKILLS.map(key=>`<div class="skill-row" data-skill="${key}"><div><strong>${labels[key]} <b>${levels[key]} / ${CONFIG.frontier.skills.max}</b></strong><small>${escapeText(descriptions[key])}</small></div>${spend?`<button data-action="skill:${key}" aria-label="Improve ${labels[key]}" ${record.points>0&&levels[key]<CONFIG.frontier.skills.max?'':'disabled'}>+1</button>`:''}</div>`).join('')}${spend?`<div class="career-footer"><span>${record.contractsCompleted} contracts completed · 1 point per completion, 2 for Exceptional</span><button class="quiet" data-action="resetCareer">Reset career</button></div>`:''}`;
+    return `<div class="skills-heading">ENGINEERING SKILLS${spend?` <span>${record.points} development point${record.points===1?'':'s'}</span>`:''}</div>${SKILLS.map(key=>`<div class="skill-row" data-skill="${key}"><div><strong>${labels[key]} <b>${levels[key]} / ${CONFIG.frontier.skills.max}</b></strong><small>${escapeText(descriptions[key])}</small></div>${spend?`<button data-action="skill:${key}" aria-label="Improve ${labels[key]}" ${record.points>0&&levels[key]<CONFIG.frontier.skills.max?'':'disabled'}>+1</button>`:''}</div>`).join('')}${spend?`<div class="career-footer"><span>${record.contractsCompleted} contracts completed · ${CONFIG.frontier.skills.completionPoints} point per completion, ${CONFIG.frontier.skills.exceptionalPoints} for Exceptional</span><button class="quiet" data-action="resetCareer">New career…</button></div>`:''}`;
   }
   title(){
     this.el.palette.hidden=true;this.el.request.hidden=true;this.el.results.hidden=false;this.blockedRoadTiles=[];html(this.el.resources,'');html(this.el.actions,'');html(this.el['battle-stats'],'');this.el['phase-label'].textContent='CANYON KEEP';this.el.clock.textContent='CHOOSE YOUR COMMISSION';this.el.status.textContent='Two commissions. One engineer.';
     const archetypes=`<option value="random" ${this.archetypeChoice==='random'?'selected':''}>Random from seed</option>`+Object.entries(FRONTIER_ARCHETYPES).map(([id,a])=>`<option value="${id}" ${id===this.archetypeChoice?'selected':''}>${escapeText(a.name)}</option>`).join('');
-    html(this.el.results,`<div class="result-card title-card"><div class="eyebrow">A CASTLE IS A PROMISE</div><h2>Choose your commission</h2><div class="commission-cards"><article class="stage-choice"><div class="commission-mark" aria-hidden="true">♜</div><h3>Canyon Keep Campaign</h3><p>Three sieges in the canyon.</p><button class="primary" data-action="stageCanyon">Play campaign</button></article><article class="stage-choice frontier-choice"><h3>The Frontier Commission</h3><p>Defend an existing town under contract.</p><div class="contract-buttons"><button class="primary" data-action="stageFrontier">Play handcrafted contract</button><button data-action="generateFrontier">Generate new contract</button></div><div class="contract-inputs"><label>Settlement archetype<select data-contract-archetype aria-label="Settlement archetype">${archetypes}</select></label><label>Enter seed<input data-contract-seed aria-label="Enter seed" value="${escapeText(this.seedText)}" maxlength="64" autocomplete="off"></label><button data-action="playSeed">Play seed</button></div><button class="quiet replay-contract" data-action="replayFrontier" ${this.lastContract?'':'disabled'}>Replay contract${this.lastContract?' · seed '+this.lastContract.seed:''}</button></article></div><div class="career-panel title-career" aria-label="Frontier engineering career">${this.skillsPanel(this.career.record.skills,true)}</div></div>`);
+    if(this.creation){
+      // Name input events update the draft without rebuilding the form on each HUD tick.
+      if(this.creation.dirty){html(this.el.results,creationMarkup(this.creation));this.creation.dirty=false;}
+      return;
+    }
+    const record=this.career.record;
+    const careerPanel=record.identity?`<div class="engineer-banner">${portraitMarkup(record.identity)}<div><strong>${escapeText(record.identity.name)}</strong><span>Reputation ${record.reputation.toFixed(1)} / ${Math.max(...Object.values(CONFIG.frontier.skills.reputationScores))} · ${record.history.length?'last '+Math.min(10,record.history.length)+' contracts':'No rated contracts yet'}</span></div><details class="career-history"><summary>Contract history (${record.history.length})</summary>${record.history.slice().reverse().map(item=>`<p>Seed ${escapeText(item.seed??'—')} · ${escapeText(item.archetype)} · ${escapeText(item.rating)} · ${money(item.finalEarnings)}</p>`).join('')||'<p>Your first commission awaits.</p>'}</details></div>${this.skillsPanel(record.skills,true)}`:this.career.needsIdentity?`<p class="career-welcome">An established engineer · ${record.contractsCompleted} contracts completed · ${record.points} development points. Your skills will be preserved when you choose your identity.</p><button data-action="stageFrontier">Name your engineer</button><button data-action="resetCareer">New career…</button>`:'<p class="career-welcome">Create your engineer when you begin your first Frontier commission. Choose a portrait and invest three starting skill points.</p>';
+    html(this.el.results,`<div class="result-card title-card"><div class="eyebrow">A CASTLE IS A PROMISE</div><h2>Choose your commission</h2><div class="commission-cards"><article class="stage-choice"><div class="commission-mark" aria-hidden="true">♜</div><h3>Canyon Keep Campaign</h3><p>Three sieges in the canyon.</p><button class="primary" data-action="stageCanyon">Play campaign</button></article><article class="stage-choice frontier-choice"><h3>The Frontier Commission</h3><p>Defend an existing town under contract.</p><div class="contract-buttons"><button class="primary" data-action="stageFrontier">Play handcrafted contract</button><button data-action="generateFrontier">Generate new contract</button></div><div class="contract-inputs"><label>Settlement archetype<select data-contract-archetype aria-label="Settlement archetype">${archetypes}</select></label><label>Enter seed<input data-contract-seed aria-label="Enter seed" value="${escapeText(this.seedText)}" maxlength="64" autocomplete="off"></label><button data-action="playSeed">Play seed</button></div><button class="quiet replay-contract" data-action="replayFrontier" ${this.lastContract?'':'disabled'}>Replay contract${this.lastContract?' · seed '+this.lastContract.seed:''}</button></article></div><div class="career-panel title-career" aria-label="Frontier engineering career">${careerPanel}</div></div>`);
   }
   propertyInfo(s){const assessment=this.game.state.contract?.assessment.find(a=>a.id===s.id);return `<strong>${escapeText(s.label||s.type)}</strong><span>${escapeText(ownerName(s.owner))}</span><span>Condition: ${Math.ceil(Math.max(0,s.hp))} / ${s.maxHp} HP</span><span>Contract value: ${money(assessment?.assessed??s.value*s.hp/s.maxHp)} · face value ${money(s.value)}</span><span>${escapeText(s.importance)}</span><span>${s.optionalObjective?'Optional property':'Mandatory objective'} · ${escapeText(s.district||'')}</span><span>Promise: ${escapeText(s.promise?.status||'none')}${s.promise?.status==='accepted'?' · '+money(s.promise.reward):''}</span>${s.type==='keep'?`<span>${this.game.state.guards.filter(g=>g.postId===s.id&&g.hp>0).length} guards assigned · autonomous defenders</span>`:''}`;}
   refreshFrontier(){

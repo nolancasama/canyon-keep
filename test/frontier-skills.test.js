@@ -67,7 +67,7 @@ test('Field emergency site duration decreases by exactly 0.3 seconds per level a
   const before=CONFIG.frontier.buildTime;
   try {
     CONFIG.frontier.buildTime=1;
-    assert.equal(emergencyBuildTime({stageId:'frontier',skills:{field:4}}),.8);
+    assert.equal(emergencyBuildTime({stageId:'frontier',skills:{field:4}}),CONFIG.frontier.skills.minBuildTime);
   } finally {CONFIG.frontier.buildTime=before;}
 });
 
@@ -120,7 +120,8 @@ test('career grants two points for Exceptional and one for other victories, once
   assert.equal(report.rating,'Exceptional Engineering','HARNESS_PRECONDITION_FAILED: exceptional contract');
   assert.equal(career.award(report,token).points,2);assert.equal(career.award(report,token).awarded,false);
   assert.equal(game.api.retrySiege(),true);start(game);career.award(finish(game),token);
-  assert.deepEqual(career.record,{skills:normalizeSkills(),points:2,contractsCompleted:1});
+  assert.deepEqual(career.record.skills,normalizeSkills());
+  assert.equal(career.record.points,2);assert.equal(career.record.contractsCompleted,1);
   const next=career.beginContract();assert.equal(game.api.restartCampaign(),true);start(game);
   game.state.inhabitants[0].hp=0;const standard=finish(game);
   assert.notEqual(standard.rating,'Exceptional Engineering','HARNESS_PRECONDITION_FAILED: standard completion');
