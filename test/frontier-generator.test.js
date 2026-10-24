@@ -78,8 +78,8 @@ test('generated Frontier contracts reuse requests, NPCs, actual scout schedule, 
   assert.equal(game.state.contract.mandatoryObjectives.filter(s=>s.id.startsWith('keep')).length,2);
   assert.equal(game.state.structures.filter(s=>s.type==='keep').length,2,'HARNESS_PRECONDITION_FAILED: generated twin keeps');
   assert.ok(game.state.contract.requests.length>=4);assert.ok(game.state.guards.length>0&&game.state.militia.length>=3);
-  const count=scheduleFor(game.state).filter(e=>e.type==='foot').length;
-  assert.ok(game.state.scoutReport.bullets[0].startsWith(`${count} foot raiders`));
+  const fronts=scheduleFor(game.state).map(e=>e.front),report=game.state.scoutReport.bullets.join(' ');
+  for(const front of game.state.frontierSiege.plan.fronts) assert.ok(fronts.includes(front.id)&&report.includes(front.name),`scout report names the ${front.name} front`);
   assert.equal(game.api.startSiege().ok,true,'HARNESS_PRECONDITION_FAILED: generated trade access');
   damageStructure(game.state,game.state.structures.find(s=>s.id==='keep-sister'),10000);game.api.tick();
   assert.equal(game.state.phase,'defeat');assert.equal(game.state.results.result,'defeat');
@@ -127,8 +127,9 @@ test('generated contracts vary terrain, towns and budgets, and rivers are contin
       if(!river.length) continue;
       const crossing=new Set([...tiles('ford'),...tiles('bridge')]),water=[...new Set([...river,...crossing])];
       assert.equal(components(water).length,1,`${archetype} seed ${seed} river channel is one four-connected body`);
-      const rows=new Set(water.map(t=>+t.split(',')[1]));
-      for(let y=0;y<map.map.length;y++) assert.ok(rows.has(y),`${archetype} seed ${seed} river spans row ${y}`);
+      // Rivers run either north-south or east-west, always edge to edge.
+      const rows=new Set(water.map(t=>+t.split(',')[1])),columns=new Set(water.map(t=>+t.split(',')[0]));
+      assert.ok(rows.size===map.map.length||columns.size===map.map[0].length,`${archetype} seed ${seed} river spans the map`);
       for(const t of river) if(!crossing.has(t)) {const [x,y]=t.split(',').map(Number);assert.equal(map.map[y][x],'#',`${archetype} seed ${seed} river ${t} has no porous gap`);}
       const count=components([...crossing]).length;
       assert.ok(count>=1&&count<=3,`${archetype} seed ${seed} has ${count} river crossings`);

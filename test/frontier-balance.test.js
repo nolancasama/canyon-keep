@@ -5,23 +5,32 @@ import { generateFrontierContract } from '../src/sim/frontier/generator.js';
 import { spawnEnemy } from '../src/sim/enemies.js';
 import { calculateContractResults } from '../src/sim/frontier/contract.js';
 import { FRONTIER_HAMLET_BUILD, applyFrontierBuild, finishFrontier,
-  frontierBalanceRow, requireFrontierAction, applyGeneratedFocusedBuild, districtCurtainEstimate } from './fixtures/frontier-reference.js';
+  frontierBalanceRow, requireFrontierAction, applyGeneratedTowerBuild, districtCurtainEstimate } from './fixtures/frontier-reference.js';
+import { WIDTH, HEIGHT } from '../src/data/map.js';
 
-for(const archetype of ['compact','twin','outpost']) test(`Frontier ${archetype} has a winning keep-focused plan and unaffordable equal curtains`,()=>{
-  // A keep-focused strategy deliberately accepts optional outlying losses.
-  // Select this scenario by briefing data before any battle outcome is known.
-  const seed=Array.from({length:8},(_,i)=>i+1).find(seed=>generateFrontierContract(seed,archetype).specialObjectives.every(g=>!g.mandatory));
-  assert.ok(seed,'HARNESS_PRECONDITION_FAILED: optional outlying objective fixture');
-  const game=createGame({stage:'frontier',generated:true,seed,archetype});
-  assert.equal(game.state.contract.generation.fallback,false,'HARNESS_PRECONDITION_FAILED: generated terrain');
-  const equalCost=districtCurtainEstimate(game.state,{wall:game.api.price('wall'),gate:game.api.price('gate')}).reduce((n,d)=>n+d.cost,0);
-  assert.ok(equalCost>game.state.gold,'equal district protection exceeds the shared budget');
-  const budget=game.state.gold,spent=applyGeneratedFocusedBuild(game);
-  finishFrontier(game);
-  console.log('Frontier generated balance',JSON.stringify({...frontierBalanceRow(game,`${archetype}:${seed}`,spent),budget,equalCost}));
-  assert.equal(game.state.phase,'victory');
-  assert.equal(game.state.results.paid,true);
-  assert.ok(game.state.structures.filter(s=>s.type==='keep').every(s=>s.hp>0));
+// Seed 1 is a multi-front contract in every archetype (compact and outpost
+// have a second wave, twin is an encirclement), chosen from a 12-seed sweep of
+// weighted versus evenly spread tower plans of identical cost.
+for(const archetype of ['compact','twin','outpost']) test(`Frontier ${archetype} rewards intel-weighted defense over rings and even spreads`,()=>{
+  const seed=1,brief=generateFrontierContract(seed,archetype);
+  assert.ok(brief.siege.plan.fronts.length>=3&&brief.specialObjectives.every(g=>!g.mandatory),'HARNESS_PRECONDITION_FAILED: optional multi-front fixture');
+  const run=mode=>{
+    const game=createGame({stage:'frontier',generated:true,seed,archetype});
+    assert.equal(game.state.contract.generation.fallback,false,'HARNESS_PRECONDITION_FAILED: generated terrain');
+    const budget=game.state.gold,spent=applyGeneratedTowerBuild(game,mode);
+    finishFrontier(game);
+    return {game,budget,spent,row:frontierBalanceRow(game,`${archetype}:${seed}:${mode}`,spent)};
+  };
+  const probe=createGame({stage:'frontier',generated:true,seed,archetype}),prices={wall:probe.api.price('wall'),gate:probe.api.price('gate')};
+  const equalCost=districtCurtainEstimate(probe.state,prices).reduce((n,d)=>n+d.cost,0),edgeRing=(2*(WIDTH-2)+2*(HEIGHT-4))*prices.wall;
+  assert.ok(equalCost>probe.state.gold,'closed rings around every district exceed the shared budget');
+  assert.ok(edgeRing>probe.state.gold*3,'walling the whole map edge costs several budgets');
+  const weighted=run('weighted'),even=run('even');
+  console.log('Frontier generated balance',JSON.stringify({weighted:weighted.row,even:even.row,budget:weighted.budget,equalCost,edgeRing}));
+  assert.equal(weighted.spent,even.spent,'HARNESS_PRECONDITION_FAILED: equal-cost comparison');
+  assert.equal(weighted.game.state.phase,'victory');assert.equal(weighted.game.state.results.paid,true);
+  assert.ok(weighted.game.state.structures.filter(s=>s.type==='keep').every(s=>s.hp>0));
+  assert.ok(weighted.row.preservation>even.row.preservation,'scout-weighted towers preserve more value than an even ring');
 });
 
 test('Frontier guard reassignment trades keep protection for exposed farming property in a controlled raid',()=>{

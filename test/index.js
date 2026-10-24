@@ -18,3 +18,4 @@ import './frontier-construction.test.js';
 import './frontier-generator.test.js';
 import './frontier-skills.test.js';
 import './frontier-balance.test.js';
+import './frontier-fronts.test.js';

@@ -81,7 +81,14 @@ export const CONFIG = {
     generator: { maxAttempts: 8, objectiveSpawnDistance: 7, minDefensiveTiles: 12,
       minDistrictValue: 300, budgetRate: 0.13, budgetMin: 600, budgetMax: 950, budgetBase: 70, budgetPerRaider: 9,
       guardCounts: [3,4,5], farmIntactFraction: 0.8, specialReward: 80, specialPenalty: 60,
-      footCount: [3,5], extraWaveCount: [0,2], placementAttempts: 160 },
+      footCount: [3,5], extraWaveCount: [0,2], placementAttempts: 160,
+      centreJitter: { x: 3, y: 2 }, ringRadius: { x: 19, y: 10 }, farRadius: { x: 24, y: 12 },
+      spawnDistrictDistance: 8, spawnSlide: 22, edgeMargin: 2 },
+    // Generated sieges: unequal multi-directional fronts. Strength weights
+    // approximate threat; bands drive the approximate scout intel.
+    fronts: { strength: { foot: 1, chiseler: 1.5, powder: 2, boss: 8 },
+      plans: { single: {}, mainSecondary: { main: [62,75] }, mainDiversion: { main: [70,82] }, encirclement: { main: [52,60] } },
+      bands: { major: 0.5, secondary: 0.2 }, waveTwoChance: 0.35, waveTwoMain: 0.7, waveSplit: 46, warningLead: 5, mainSpawns: 2 },
     caltrops: { uses: 10, damage: 4, slowFactor: 0.5, slowDuration: 2 },
     bonuses: { allCivilians: 80, workshop: 60 },
     rating: { exceptional: 95, strong: 80, acceptable: 60, strongCasualties: 1 },

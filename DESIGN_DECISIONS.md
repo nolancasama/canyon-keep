@@ -721,3 +721,60 @@ actual clusters; budget = base + assessed×rate + raiders×perRaider, clamped
 600–950. In-game skills collapse to one hover line so the five-category palette
 still fits 1366×768; the full skills panel stays on the title screen.
 Rejected: arbitrary noise terrain (the brief asks for authored patterns first).
+
+## 2026-10-24 — Central castles and multi-directional sieges (user brief, controller-frozen)
+
+Applies to generated Frontier contracts. The canyon stage is untouched. The
+handcrafted Frontier contract keeps its layout and east-only schedule as the
+"single major front" reference (its fixtures stay valid).
+
+- **Layout follows the threat.** Generation picks the siege plan (fronts) and
+  places settlements relative to the map centre: the primary keep within
+  ~6 tiles of centre (jittered, never exactly centred), neighbourhoods around it
+  asymmetrically, farms/outskirts outward, satellite hamlets toward some edge.
+  Twin Settlements: two keeps on opposite or diagonal sides of centre, ~16–26
+  tiles apart, no single central keep. Terrain patterns must not cut through
+  the town (rivers/ridges offset from the centre or crossing it with bridges).
+- **Fronts:** 8 compass directions (N, NE, E, SE, S, SW, W, NW); entry regions
+  on the matching edge/corner. Plans: single front; main + secondary; main +
+  diversion(s); 3–4-direction encirclement. Never mandatory four-way. Weights
+  are unequal by default (e.g. 70/20/10); enemy totals stay as budgeted, each
+  group is assigned to one front; bosses travel with the main front.
+- **Waves:** a contract siege may have two waves; wave 2 may shift the main
+  front ("staggered fronts" and "principal direction changes" are expressed
+  inside one siege, since Frontier contracts are single-siege). Multi-siege
+  contracts are deferred.
+- **Intel is honest but approximate.** Edge arrows sized by band (Major ≥50%,
+  Secondary 20–49%, Minor <20%) — no exact counts or times. Every front that
+  will attack is shown. Minor fronts may be labelled "possible raiding party"
+  (uncertain) but never omitted. Wave-2 shifts are reported as "a second wave
+  may come from X". In battle, an edge warning appears ~5 s before any group
+  enters from a front that has not yet attacked.
+- **Validation adds:** every spawn on the map edge and ≥ 8 tiles from any
+  district; every front has a walkable route to a keep; roads lead from
+  most fronts toward the town; no front unreachable-by-terrain; the main front
+  carries ≥ 50% of strength; seed-determinism includes the siege plan.
+- **Anti-ring rule (balance fixture):** the cost of walling the map's full
+  inner perimeter, or a closed ring around every district, exceeds the budget
+  by a wide margin, and a front-weighted plan preserves more value than an
+  evenly spread plan of the same cost on at least one seed per archetype.
+
+## 2026-10-24 — Multi-directional sieges: implementation decisions
+
+- "Main front ≥ 50%" is enforced **per wave**: a shifted second wave can make
+  two fronts nearly equal overall (e.g. 55/45) while each wave stays clearly
+  unequal. Requiring it overall would have made wave shifts almost impossible.
+- Scout intel gives a total rounded to 5 ("roughly 20 raiders") and banded
+  per-front strength; chiseler/powder numbers become "a few / several / many".
+  The old exact-count bullet and its test were replaced.
+- Balance finding: putting every tower on the main front often loses because
+  diversions and second waves reach the keep; an even ring around the keep
+  usually wins but leaks value; a plan weighted by the scout bands won 30/36
+  sweep runs vs 28/36 for even rings, each better on different seeds. The
+  fixture asserts the weighted plan beats an equal-cost even ring on seed 1
+  (multi-front in all archetypes) rather than claiming it always does.
+- Rivers/ridges are kept out of districts entirely (no bridged towns) so the
+  existing continuity/crossing rules hold; they now run horizontally or
+  vertically. Centre jitter is ±3×±2 tiles plus ±2×±1 keep jitter (≤6.5 tiles).
+- Same seed across archetypes shares the first RNG draws, so plans/terrain can
+  look alike between archetypes on one seed; accepted (seeds still differ).

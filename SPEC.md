@@ -601,17 +601,40 @@ Twin Settlements has two comparably valuable communities, both keeps
 mandatory, sharing one budget; Town + Outpost has a secure town and remote
 hamlet. Enemy breach fields consider every living keep in Frontier.
 
-Authored terrain patterns combine bending rivers with bridges/fords, ridges
-and rock outcrops with seeded road routes and irregular district clusters.
+Generation picks the siege plan first. The primary keep sits within ~6.5
+tiles of the map centre (jittered); ring and far districts are pushed outward
+along seeded bearings, and the first ring district faces the main front 60% of
+the time. Twin Settlements flank the centre on a horizontal, diagonal or
+vertical axis (keeps 16–28 tiles apart). Rivers and ridges (vertical or
+horizontal, edge to edge) run through open ground beside the settlements;
+a pattern that cannot fit becomes open outcrops.
+
+Siege plans (`src/sim/frontier/fronts.js`): fronts from eight compass
+directions — single front, main + secondary, main + 1–2 diversions, or a
+3–4-direction encirclement. Each enemy joins the front furthest below its
+strength target for its wave (foot 1, chiseler 1.5, powder 2, boss 8; the boss
+joins that wave's main front). A 35% chance adds a second wave (from t = 46 s)
+that swings 70% of later strength onto another or a fresh front. Each wave's
+main front carries ≥50%. Entries slide along the front's edge to walkable
+tiles ≥8 tiles from every district; the main front has two entries, others one.
+Prep shows an inward arrow per front sized and labelled MAJOR (≥50%),
+SECONDARY (20–49%) or POSSIBLE RAID (<20%), dashed "2ND WAVE?" for wave-2-only
+fronts, with tinted entry tiles. The scout report names every front with banded
+strength, the second-wave shift and rounded raider totals; no exact counts or
+times. In battle arrows dim; each front pulses "INCOMING" 5 s before its first
+entry (`frontWarning` event, `state.frontWarnings`). The handcrafted contract
+keeps its single eastern schedule and label.
+
 Seeds vary terrain, roads, property/population, keep positions, guard counts,
-entry edges/points, owner names/requests and special objectives. Budget scales
+siege plans and entries, owner names/requests and special objectives. Budget scales
 with acceptance value; a separate complete curtain for every district is
 unaffordable. Named-building survival and preservation of at least 80% of
 farm buildings have explicit mandatory/optional labels, locations and
 reward/penalty amounts. Mandatory special failure fails the contract;
 optional failure affects the itemized payment and rating.
 
-Validation checks placement/overlaps, edge entries, objective spawn clearance,
+Validation checks placement/overlaps, edge entries clear of districts, every
+front routing to a keep, a ≥50% main front per wave, objective spawn clearance,
 enemy reachability of every keep, civilian evacuation, connected district
 roads, defensive space, NPC pathability and multiple valuable districts.
 Invalid candidates retry using a deterministic `(seed, attempt)` derivation
@@ -620,6 +643,7 @@ reasons and fallback state are recorded. Identical seed and archetype produce
 deep-equal initial simulation state. Restart regenerates the same contract;
 Retry restores the exact pre-siege snapshot including construction and promises.
 
-Headless balance fixtures cover unaffordable equal defense, focused victories
-for all archetypes, the keep/property tradeoff of guard reassignment, and a
+Headless balance fixtures cover unaffordable equal defense (district curtains
+and the full map edge), scout-weighted tower plans that win and beat an
+equal-cost even ring on a multi-front seed for every archetype, the keep/property tradeoff of guard reassignment, and a
 negotiated outlying promise worth more than its dedicated paid defenses.

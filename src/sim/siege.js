@@ -9,7 +9,8 @@ import { stepPendulum } from './pendulum.js';
 import { createInhabitants, stepInhabitants } from './inhabitants.js';
 import { stepGolems } from './golems.js';
 import { resetMechanisms, stepMechanisms } from './mechanisms.js';
-import { stageFor, scheduleFor } from '../data/stages.js';
+import { stageFor, scheduleFor, siegeFor } from '../data/stages.js';
+import { stepFrontWarnings } from './frontier/fronts.js';
 import { startFrontierNpcs, stepFrontierNpcs } from './frontier/npcs.js';
 import { startFrontierConstruction, stepFrontierConstruction } from './frontier/construction.js';
 import { objectiveMet } from './frontier/contract.js';
@@ -29,6 +30,7 @@ export function createSiegeState(state) {
   state.keepReached = false;
   state.stats = { enemiesDefeated: 0, inhabitantsLost: 0, buildingsDestroyed: 0, bossDefeated: false,
     bountyGold: 0, bountyCounts: { foot: 0, chiseler: 0, powder: 0, boss: 0 } };
+  if(siegeFor(state)?.plan) state.frontWarnings=[];
   if(stageFor(state).flags.npcDefenders) {startFrontierConstruction(state);startFrontierNpcs(state);}
   else createInhabitants(state);
   rebuildFlow(state);
@@ -40,6 +42,7 @@ export function stepSiege(state, dt = SIM_DT) {
   if (state.phase !== 'siege') return state;
   state.tick++;
   state.time = state.tick * SIM_DT;
+  if(state.frontWarnings) stepFrontWarnings(state);
   while (state.spawnIndex < state.schedule.length && state.schedule[state.spawnIndex].t <= state.time) {
     const entry = state.schedule[state.spawnIndex++];
     spawnEnemy(state, entry.type, entry.x, entry.y, entry.lane);

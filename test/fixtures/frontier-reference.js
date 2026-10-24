@@ -33,23 +33,41 @@ export function frontierBalanceRow(game,label,spent) {
 
 // Focus all affordable archer coverage ahead of mandatory keeps. Candidate
 // locations use public previews, so occupied lots and placement rules apply.
-export function applyGeneratedFocusedBuild(game) {
-  const keeps=game.state.structures.filter(s=>s.type==='keep');
+// Briefing-visible intel only: the opening main front from the scout plan.
+export function mainFront(state) {
+  return state.frontierSiege.plan.fronts.reduce((a,b)=>b.waveShares[0]>a.waveShares[0]?b:a);
+}
+
+// Towers ring each keep at a bearing; 'focused' biases every tower toward the
+// main front, 'even' rotates the same towers through the four compass sides.
+export function applyGeneratedTowerBuild(game,mode='focused') {
+  const keeps=game.state.structures.filter(s=>s.type==='keep'),front=mainFront(game.state).anchor;
   const towerCount=Math.floor(game.state.gold/game.api.price('tower'));
+  // Twin contracts give the keep nearer the main front the larger share.
+  const ordered=[...keeps].sort((a,b)=>Math.hypot(a.x-front.x,a.y-front.y)-Math.hypot(b.x-front.x,b.y-front.y));
+  // 'weighted' splits towers across every reported front by its scout band.
+  const weight={major:3,secondary:2,minor:1},fronts=game.state.frontierSiege.plan.fronts,given=fronts.map(()=>0);
   for(let i=0;i<towerCount;i++) {
-    // The twin reference has a southern brute approach: retain two northern
-    // towers and put four on the southern keep instead of splitting evenly.
-    const keep=keeps.length===2?keeps[i<2?0:1]:keeps[0],candidates=[];
-    for(let y=keep.y-4;y<=keep.y+6;y++) for(let x=keep.x+3;x<=keep.x+10;x++) {
-      if(game.api.preview('tower',x,y).ok) candidates.push({x,y,score:Math.hypot(x-(keep.x+7),y-(keep.y+1))});
+    const keep=ordered.length===2&&i%3===2?ordered[1]:ordered[0],cx=keep.x+1.5,cy=keep.y+1.5;
+    let target=front;
+    if(mode==='weighted') {
+      const total=fronts.reduce((n,f)=>n+weight[f.band],0);
+      const pick=fronts.reduce((best,f,k)=>weight[f.band]/total*(i+1)-given[k]>weight[fronts[best].band]/total*(i+1)-given[best]?k:best,0);
+      given[pick]++;target=fronts[pick].anchor;
+    }
+    const toward=mode==='even'?i*Math.PI/2:Math.atan2(target.y-cy,target.x-cx);
+    const tx=cx+Math.cos(toward)*6,ty=cy+Math.sin(toward)*6,candidates=[];
+    for(let y=Math.floor(ty)-5;y<=Math.ceil(ty)+5;y++) for(let x=Math.floor(tx)-5;x<=Math.ceil(tx)+5;x++) {
+      if(game.api.preview('tower',x,y).ok) candidates.push({x,y,score:Math.hypot(x-tx,y-ty)});
     }
     candidates.sort((a,b)=>a.score-b.score||a.y-b.y||a.x-b.x);
     const tile=candidates[0];
-    if(!tile) throw new Error('HARNESS_PRECONDITION_FAILED: no legal focused tower site');
-    requireFrontierAction(game.api.place('tower',tile.x,tile.y),'focused keep coverage');
+    if(!tile) throw new Error('HARNESS_PRECONDITION_FAILED: no legal tower site');
+    requireFrontierAction(game.api.place('tower',tile.x,tile.y),`${mode} keep coverage`);
   }
   return game.state.prepGold-game.state.gold;
 }
+export const applyGeneratedFocusedBuild=game=>applyGeneratedTowerBuild(game,'focused');
 
 export function requireFrontierAction(result, description) {
   if(!result?.ok) throw new Error(`HARNESS_PRECONDITION_FAILED: ${description}: ${result?.reason}`);

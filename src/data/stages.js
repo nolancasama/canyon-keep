@@ -20,6 +20,6 @@ export const siegeFor = state => stageFor(state).sieges[state.siegeIndex??1];
 export function scheduleFor(state) {
   if(stageFor(state).id==='canyon') return expandSchedule(state.siegeIndex);
   return siegeFor(state).groups.flatMap(group=>Array.from({length:group.count},(_,i)=>({
-    t:group.t+i*group.spacing,type:group.type,lane:group.lane,x:group.x,y:group.y,
+    t:group.t+i*group.spacing,type:group.type,lane:group.lane,x:group.x,y:group.y,...(group.front?{front:group.front}:{}),
   }))).sort((a,b)=>a.t-b.t);
 }

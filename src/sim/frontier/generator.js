@@ -3,8 +3,9 @@ import { WIDTH, HEIGHT } from '../../data/map.js';
 import { FRONTIER_MAP } from '../../data/frontier/map.js';
 import { FRONTIER_SIEGE } from '../../data/frontier/siege.js';
 import { frontierSettlement, frontierRequests } from '../../data/frontier/settlement.js';
-import { FRONTIER_ARCHETYPES, TERRAIN_TEMPLATES, OWNER_NAMES, REQUEST_TEMPLATES, SPECIAL_BUILDING_NAMES } from '../../data/frontier/templates.js';
+import { FRONTIER_ARCHETYPES, TERRAIN_TEMPLATES, TWIN_AXES, OWNER_NAMES, REQUEST_TEMPLATES, SPECIAL_BUILDING_NAMES } from '../../data/frontier/templates.js';
 import { createRng, random } from '../rng.js';
+import { FRONT_DIRECTIONS, edgeAnchor, chooseFrontPlan, assignFronts, frontScoutReport } from './fronts.js';
 
 const directions=[[1,0],[0,1],[-1,0],[0,-1]],key=(x,y)=>y*WIDTH+x;
 const copy=value=>structuredClone(value);
@@ -48,7 +49,7 @@ function search(map,starts,pass,goal=null,order=directions) {
 function makeCandidate(seed,archetype,attempt) {
   const rules=CONFIG.frontier.generator,rng=createRng((seed+Math.imul(attempt+1,0x9e3779b9))>>>0);
   const integer=(min,max)=>min+Math.floor(random(rng)*(max-min+1)),pick=items=>items[integer(0,items.length-1)];
-  const template=FRONTIER_ARCHETYPES[archetype],terrain=pick(TERRAIN_TEMPLATES);
+  const chance=p=>random(rng)<p,template=FRONTIER_ARCHETYPES[archetype];
   const cells=Array.from({length:HEIGHT},()=>Array(WIDTH).fill('.')),features=[];
   for(let x=0;x<WIDTH;x++) {cells[0][x]='#';cells[HEIGHT-1][x]='#';}
   for(let y=0;y<HEIGHT;y++) {cells[y][0]='#';cells[y][WIDTH-1]='#';}
@@ -56,28 +57,84 @@ function makeCandidate(seed,archetype,attempt) {
     features.push({kind,x,y,w,h});
     for(let py=y;py<y+h;py++) for(let px=x;px<x+w;px++) cells[py][px]=blocked?'#':'.';
   }
-  if(terrain.kind==='river') {
-    const count=integer(1,3),crossings=Array.from({length:count},(_,i)=>({y:Math.round((i+1)*(HEIGHT-4)/(count+1))+integer(-1,1),kind:pick(['bridge','ford'])}));
-    let x=integer(34,37);
-    for(let y=0;y<HEIGHT;y++) {
-      // Adjacent strips always overlap: the channel stays four-connected,
-      // including beneath the deliberately walkable crossing surfaces.
-      const target=terrain.bend?(y<HEIGHT/2?34:37):36;
-      x=Math.max(34,Math.min(37,x+(random(rng)<.55?Math.sign(target-x):integer(-1,1))));
-      const w=integer(2,3);feature('river',x,y,w,1);
-      const crossing=crossings.find(c=>y===c.y||y===c.y+1);
-      if(crossing) feature(crossing.kind,x,y,w,1,false);
+  // The siege plan comes first: settlements are then laid out around the map
+  // centre with some outskirts deliberately facing the main assault.
+  const plan=chooseFrontPlan(integer,chance),mainAngle=FRONT_DIRECTIONS[plan.fronts[0].direction].angle;
+  const cx=(WIDTH-1)/2,cy=(HEIGHT-1)/2,m=rules.edgeMargin,rects=[];
+  const clear=(x,y,w,h,gap)=>!rects.some(r=>x<r.x+r.w+gap&&x+w+gap>r.x&&y<r.y+r.h+gap&&y+h+gap>r.y);
+  const fits=(x,y,w,h)=>x>=m&&y>=m&&x+w<=WIDTH-m&&y+h<=HEIGHT-m;
+  function outward(d,angle,radius) {
+    for(let turn=0;turn<12;turn++) {
+      const a=(angle+(turn%2?1:-1)*Math.ceil(turn/2)*30)*Math.PI/180;
+      for(let s=.8;s<=1.6;s+=.05) {
+        const x=Math.round(cx+Math.cos(a)*radius.x*s-d.w/2),y=Math.round(cy+Math.sin(a)*radius.y*s-d.h/2);
+        if(fits(x,y,d.w,d.h)&&clear(x,y,d.w,d.h,2)) return {x,y};
+      }
     }
-  } else if(terrain.kind==='ridge') {
-    const x=integer(34,37),passes=[integer(8,12),integer(23,27)];
-    for(let y=0;y<HEIGHT;y++) if(!passes.some(p=>y>=p&&y<p+3)) feature('ridge',x,y,2,1);
+    return null;
   }
-  for(let i=0;i<(terrain.kind==='plain'?7:3);i++) {
-    const x=i%2?integer(60,61):integer(3,8),y=integer(3,29);
-    feature('rock',x,y,integer(2,3),integer(2,4));
+  const axis=pick(TWIN_AXES),side=chance(.5)?1:-1,districts=[],structures=[];let ringCount=0;
+  for(const d of template.districts) {
+    const w=d.w+integer(-2,0),h=d.h+integer(-1,0),spec={...d,types:undefined,w,h};let at=null;
+    if(d.place==='centre') at={x:Math.round(cx+integer(-rules.centreJitter.x,rules.centreJitter.x)-w/2),y:Math.round(cy+integer(-rules.centreJitter.y,rules.centreJitter.y)-h/2)};
+    else if(d.place==='twinA'||d.place==='twinB') {
+      const sign=(d.place==='twinA'?1:-1)*side;
+      at={x:Math.round(cx+axis.x*sign+integer(-2,2)-w/2),y:Math.round(cy+axis.y*sign+integer(-1,1)-h/2)};
+    } else {
+      const angle=ringCount++===0&&chance(.6)?mainAngle+integer(-30,30):integer(0,359);
+      at=outward(spec,angle,d.place==='far'?rules.farRadius:rules.ringRadius);
+    }
+    if(!at) return null;
+    at.x=Math.max(m,Math.min(WIDTH-m-w,at.x));at.y=Math.max(m,Math.min(HEIGHT-m-h,at.y));
+    if(!clear(at.x,at.y,w,h,1)) return null;
+    districts.push({...spec,...at});rects.push({x:at.x,y:at.y,w,h});
   }
-  const districts=template.districts.map(d=>({...d,types:undefined,x:d.x+integer(-3,0),
-    y:Math.max(2,Math.min(HEIGHT-d.h-2,d.y+integer(-2,2))),w:d.w+integer(-2,0),h:d.h+integer(-1,0)})),structures=[];
+  // Rivers and ridges run edge to edge through open ground beside the
+  // settlements; a pattern that cannot fit the layout becomes open outcrops.
+  let terrain=pick(TERRAIN_TEMPLATES);
+  function channel(vertical,width,bend,wander) {
+    const length=vertical?HEIGHT:WIDTH,span=vertical?WIDTH:HEIGHT,bases=[];
+    for(let b=4;b<span-6;b++) bases.splice(integer(0,bases.length),0,b);
+    for(const base of bases) {
+      const strips=[];let l=base;
+      for(let a=0;a<length;a++) {
+        const target=bend?(a<length/2?base-2:base+2):base;
+        if(wander) l=Math.max(base-2,Math.min(base+2,l+(chance(.55)?Math.sign(target-l):integer(-1,1))));
+        const w=width===2?2:integer(2,3);strips.push({a,l,w});
+      }
+      const tiles=strips.flatMap(s=>Array.from({length:s.w},(_,i)=>vertical?{x:s.l+i,y:s.a}:{x:s.a,y:s.l+i}));
+      if(tiles.every(t=>clear(t.x,t.y,1,1,1))) return strips;
+    }
+    return null;
+  }
+  if(terrain.kind!=='plain') {
+    const vertical=chance(.5),river=terrain.kind==='river';
+    const strips=channel(vertical,river?3:2,terrain.bend,river)??channel(!vertical,river?3:2,terrain.bend,river);
+    if(!strips) terrain=TERRAIN_TEMPLATES.find(t=>t.kind==='plain');
+    else {
+      const length=strips.length,isVertical=length===HEIGHT;
+      const place=(kind,s,blocked=true)=>isVertical?feature(kind,s.l,s.a,s.w,1,blocked):feature(kind,s.a,s.l,1,s.w,blocked);
+      if(river) {
+        const count=integer(1,3),crossings=Array.from({length:count},(_,i)=>({a:Math.round((i+1)*(length-4)/(count+1))+integer(-1,1),kind:pick(['bridge','ford'])}));
+        for(const s of strips) {
+          // Adjacent strips always overlap: the channel stays four-connected,
+          // including beneath the deliberately walkable crossing surfaces.
+          place('river',s);
+          const crossing=crossings.find(c=>s.a===c.a||s.a===c.a+1);
+          if(crossing) place(crossing.kind,s,false);
+        }
+      } else {
+        const passes=[integer(Math.round(length*.2),Math.round(length*.35)),integer(Math.round(length*.6),Math.round(length*.75))];
+        for(const s of strips) if(!passes.some(p=>s.a>=p&&s.a<p+3)) place('ridge',s);
+      }
+    }
+  }
+  for(let i=0,placed=0;i<60&&placed<(terrain.kind==='plain'?7:3);i++) {
+    const w=integer(2,3),h=integer(2,4),x=integer(3,WIDTH-4-w),y=integer(3,HEIGHT-4-h);
+    if(!clear(x,y,w,h,2)) continue;
+    if(Array.from({length:h},(_,dy)=>cells[y+dy].slice(x,x+w)).flat().some(c=>c!=='.')) continue;
+    feature('rock',x,y,w,h);placed++;
+  }
   function property(type,district,x,y,id,label) {
     const def=CONFIG.structures[type],value=CONFIG.frontier.property[type],name=pick(OWNER_NAMES);
     return {id,type,label,x,y,w:def.w,h:def.h,district:district.id,owner:{name,role:type==='keep'?'Town council':type==='farm'?'Farmer':'Property owner'},
@@ -86,7 +143,7 @@ function makeCandidate(seed,archetype,attempt) {
       ownerRewardOffer:0,promise:{status:'none',reward:0,negotiated:false}};
   }
   for(const district of districts.filter(d=>d.keep)) {
-    const x=district.x+integer(3,6),y=district.y+Math.floor(district.h/2)+integer(-2,0),id=structures.length?'keep-sister':'keep';
+    const x=district.x+Math.floor(district.w/2)-1+integer(-2,2),y=district.y+Math.floor(district.h/2)-1+integer(-1,1),id=structures.length?'keep-sister':'keep';
     const s=property('keep',district,x,y,id,`${district.name} Keep`);structures.push(s);
     for(let py=y;py<y+s.h;py++) for(let px=x;px<x+s.w;px++) cells[py][px]='K';
   }
@@ -118,9 +175,24 @@ function makeCandidate(seed,archetype,attempt) {
     d.w=Math.max(...d.regions.map(r=>r.x+r.w))-d.x;d.h=Math.max(...d.regions.map(r=>r.y+r.h))-d.y;
     if(d.keep) for(const r of d.regions) for(let y=r.y;y<r.y+r.h;y++) for(let x=r.x;x<r.x+r.w;x++) if(cells[y][x]==='.') cells[y][x]='C';
   }
-  const entryMode=integer(0,2),spawns=entryMode===0?[{x:63,y:8},{x:63,y:18},{x:63,y:28}]:
-    entryMode===1?[{x:52,y:0},{x:63,y:18},{x:52,y:35}]:[{x:63,y:integer(5,11)},{x:63,y:integer(16,21)},{x:63,y:integer(26,31)}];
-  for(const p of spawns) cells[p.y][p.x]='S';
+  // Entry points slide along each front's edge until they open onto walkable
+  // ground well clear of every settlement.
+  const spawns=[];
+  for(const [i,front] of plan.fronts.entries()) {
+    const anchor=edgeAnchor(front.direction),vertical=anchor.edge==='east'||anchor.edge==='west',length=vertical?HEIGHT:WIDTH;
+    const at=a=>anchor.edge==='north'?{x:a,y:0,ix:a,iy:1}:anchor.edge==='south'?{x:a,y:HEIGHT-1,ix:a,iy:HEIGHT-2}:anchor.edge==='west'?{x:0,y:a,ix:1,iy:a}:{x:WIDTH-1,y:a,ix:WIDTH-2,iy:a};
+    const start=vertical?anchor.y:anchor.x,want=i===0?CONFIG.frontier.fronts.mainSpawns:1;front.lanes=[];
+    for(let step=0;step<=rules.spawnSlide*2&&front.lanes.length<want;step++) {
+      const a=start+(step%2?1:-1)*Math.ceil(step/2);
+      if(a<2||a>length-3) continue;
+      const p=at(a);
+      if(cells[p.iy][p.ix]!=='.'||spawns.some(s=>Math.hypot(s.x-p.x,s.y-p.y)<4)) continue;
+      if(districts.some(d=>distanceToLot(p,d)<rules.spawnDistrictDistance)) continue;
+      front.lanes.push(spawns.length);spawns.push({x:p.x,y:p.y});cells[p.y][p.x]='S';
+    }
+    if(!front.lanes.length) return null;
+    Object.assign(front,{name:FRONT_DIRECTIONS[front.direction].name,edge:anchor.edge,anchor:{x:anchor.x,y:anchor.y}});
+  }
   const lots=occupied(structures),roadSet=new Set(),roads=[],order=random(rng)<.5?directions:[directions[1],directions[0],directions[3],directions[2]];
   const pass=(x,y)=>!lots.has(key(x,y))||lots.get(key(x,y)).type==='keep';
   const anchor=perimeter(structures[0]).find(p=>cells[p.y][p.x]!=='#'&&pass(p.x,p.y));
@@ -154,14 +226,10 @@ function makeCandidate(seed,archetype,attempt) {
   }
   objective.mandatory=random(rng)<.25;objective.reward=rules.specialReward;objective.penalty=rules.specialPenalty;
   const groups=copy(CONFIG.frontier.siege.groups);
-  for(const g of groups) {g.lane=integer(0,spawns.length-1);if(g.type==='foot') g.count=integer(...rules.footCount);}
-  const footCount=groups.filter(g=>g.type==='foot').reduce((n,g)=>n+g.count,0),count=type=>groups.filter(g=>g.type===type).reduce((n,g)=>n+g.count,0);
-  const siege={name:`The ${template.name} Raid`,bossHp:CONFIG.frontier.siege.bossHp,groups,scoutReport:[
-    `${footCount} foot raiders approach across ${spawns.length} entry points (${entryMode===1?'north, east and south':'the eastern edge'}).`,
-    `${count('chiseler')} chiselers and ${count('powder')} powder carriers accompany the columns.`,
-    `${count('boss')} giant brute follows the raiders toward the keeps.`,
-    `The ${districts.map(d=>d.name).join(', ')} share one construction budget; exposed properties need difficult choices.`,
-  ]};
+  for(const g of groups) if(g.type==='foot') g.count=integer(...rules.footCount);
+  const footCount=groups.filter(g=>g.type==='foot').reduce((n,g)=>n+g.count,0),schedule=assignFronts(groups,plan);
+  const siege={name:`The ${template.name} Raid`,bossHp:CONFIG.frontier.siege.bossHp,groups:schedule,plan,
+    scoutReport:frontScoutReport(plan,groups,districts)};
   const assessed=structures.reduce((n,s)=>n+Math.round(s.value*s.hp/s.maxHp),0),budget=Math.round(Math.max(rules.budgetMin,Math.min(rules.budgetMax,rules.budgetBase+assessed*rules.budgetRate+footCount*rules.budgetPerRaider)));
   return {seed,archetype,generated:true,map:{id:`frontier-${seed}-${archetype}`,map:cells.map(row=>row.join('')),keep:{x:structures[0].x,y:structures[0].y},spawns,sites:[],roads,districts,features,terrainPattern:terrain.id},
     structures,requests,specialObjectives:[objective],siege,budget,guardCount:pick(rules.guardCounts)};
@@ -204,6 +272,15 @@ export function validateFrontierContract(candidate) {
     if(targets.some(s=>map.spawns.some(p=>distanceToLot(p,s)<rules.objectiveSpawnDistance))) errors.push('Objective too close to entry');
   }
   for(const keep of keeps) if(map.spawns.some(p=>distanceToLot(p,keep)<rules.objectiveSpawnDistance)) errors.push('Keep too close to entry');
+  if(map.spawns.some(p=>map.districts.some(d=>distanceToLot(p,d)<rules.spawnDistrictDistance))) errors.push('Entry inside or beside a settlement');
+  const plan=candidate.siege?.plan;
+  if(plan) {
+    for(const front of plan.fronts) {
+      const entries=front.lanes.map(i=>map.spawns[i]).filter(Boolean),reached=entries.length?search(cells,entries,()=>true):new Map();
+      if(!keeps.some(k=>reached.has(key(k.x,k.y)))) errors.push('Front cannot reach a keep');
+    }
+    for(let wave=0;wave<plan.waves;wave++) if(Math.max(...plan.fronts.map(f=>f.waveShares[wave]))<.5) errors.push('No main front carries half the strength');
+  }
   return {ok:errors.length===0,errors:[...new Set(errors)]};
 }
 

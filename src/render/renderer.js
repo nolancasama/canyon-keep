@@ -59,7 +59,26 @@ export class Renderer {
     if(state.phase==='siege'&&state.speed===0){c.fillStyle='#11202475';c.fillRect(0,0,1280,720);c.fillStyle='#f0dfac';c.font='24px Georgia';c.textAlign='center';c.fillText('PAUSED',640,70);c.font='12px system-ui';c.fillText('P TO RESUME',640,93);c.textAlign='left';}
     this.frame.getContext('2d').drawImage(this.canvas,0,0);
   }
-  mapLabels(c,state){c.save();if(state.stageId==='frontier'){const map=stageFor(state).map;c.font='italic 13px Georgia';c.fillStyle='#e7e2bca0';for(const d of map.districts||[])c.fillText(d.name,d.x*TILE+4,d.y*TILE-9);const edges=[...new Set(map.spawns.map(p=>p.x===0?'west':p.x===63?'east':p.y===0?'north':'south'))];c.fillStyle='#f3c38e';c.textAlign='right';c.fillText(`Raiders approach: ${edges.join(' / ')}`,1250,35);c.restore();return;}c.fillStyle='#c3c7ae77';c.font='10px system-ui';c.letterSpacing='2px';c.fillText('THE CANYON KEEP',1000,130);c.fillStyle='#c9ba9290';c.font='italic 13px Georgia';c.fillText('The western approach',85,100);c.restore();}
+  // Approximate intel: one inward arrow per front sized by band, entry tiles
+  // tinted. Battle dims them until a front's lead warning fires.
+  fronts(c,state,plan){
+    const size={major:36,secondary:27,minor:19},label={major:'MAJOR',secondary:'SECONDARY',minor:'POSSIBLE RAID'},spawns=stageFor(state).map.spawns,lead=CONFIG.frontier.fronts.warningLead;
+    c.save();c.font='bold 16px system-ui';c.textAlign='center';c.textBaseline='middle';c.lineJoin='round';
+    for(const f of plan.fronts){
+      const warning=(state.frontWarnings||[]).find(w=>w.frontId===f.id),alert=state.phase==='siege'&&warning&&state.time-warning.t<lead+1.5;
+      const alpha=state.phase==='prep'?.95:alert?.75+Math.sin(this.visualTime*9)*.25:.3,color=alert?'#ff7a5c':'#f3c38e';
+      c.globalAlpha=alpha*.35;c.fillStyle=color;for(const lane of f.lanes){const p=spawns[lane];if(p)c.fillRect((p.x-(p.y===0||p.y===35?2:0))*TILE,(p.y-(p.x===0||p.x===63?2:0))*TILE,(p.y===0||p.y===35?5:1)*TILE,(p.x===0||p.x===63?5:1)*TILE);}
+      const ax=(f.anchor.x+.5)*TILE,ay=(f.anchor.y+.5)*TILE,dx=640-ax,dy=360-ay,len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len,s=size[f.band];
+      const bx=ax+ux*28,by=ay+uy*28,tipX=bx+ux*s,tipY=by+uy*s;
+      c.globalAlpha=alpha;c.setLineDash(f.wave===2&&state.phase==='prep'?[4,3]:[]);c.strokeStyle='#1b1d16';c.lineWidth=4;c.fillStyle=color;
+      c.beginPath();c.moveTo(tipX,tipY);c.lineTo(bx-uy*s*.55,by+ux*s*.55);c.lineTo(bx+ux*s*.25,by+uy*s*.25);c.lineTo(bx+uy*s*.55,by-ux*s*.55);c.closePath();c.stroke();c.fill();c.setLineDash([]);
+      if(state.phase==='prep'||alert){const text=alert?`INCOMING · ${f.name.toUpperCase()}`:f.wave===2?'2ND WAVE?':label[f.band],tx=tipX+ux*26-uy*0,ty=tipY+uy*20;c.strokeStyle='#1b1d16';c.lineWidth=4;c.strokeText(text,tx,ty);c.fillText(text,tx,ty);}
+    }
+    c.restore();
+  }
+  mapLabels(c,state){c.save();if(state.stageId==='frontier'){const map=stageFor(state).map;c.font='italic 13px Georgia';c.fillStyle='#e7e2bca0';for(const d of map.districts||[])c.fillText(d.name,d.x*TILE+4,d.y*TILE-9);const plan=stageFor(state).sieges[1]?.plan;c.fillStyle='#f3c38e';c.textAlign='right';
+    if(plan){const main=plan.fronts.reduce((a,b)=>b.waveShares[0]>a.waveShares[0]?b:a);c.fillText(`Main assault expected: ${main.name}`,1250,35);c.restore();this.fronts(c,state,plan);return;}
+    const edges=[...new Set(map.spawns.map(p=>p.x===0?'west':p.x===63?'east':p.y===0?'north':'south'))];c.fillText(`Raiders approach: ${edges.join(' / ')}`,1250,35);c.restore();return;}c.fillStyle='#c3c7ae77';c.font='10px system-ui';c.letterSpacing='2px';c.fillText('THE CANYON KEEP',1000,130);c.fillStyle='#c9ba9290';c.font='italic 13px Georgia';c.fillText('The western approach',85,100);c.restore();}
   frontierProperties(c,state,ui){
     const hovered=ui.hover&&state.structures.find(s=>s.owner&&ui.hover.x>=s.x&&ui.hover.x<s.x+s.w&&ui.hover.y>=s.y&&ui.hover.y<s.y+s.h);
     c.save();for(const s of state.structures)if(s.owner){const x=s.x*TILE,y=s.y*TILE,w=s.w*TILE,h=s.h*TILE,selected=s.id===ui.requestBuildingId||s.id===(hovered?.id??ui.selectedStructureId),request=state.contract.requests.find(r=>r.buildingId===s.id),accepted=s.promise?.status==='accepted';

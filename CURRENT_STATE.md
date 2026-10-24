@@ -1,7 +1,9 @@
 # Current State
 
 ## Status
-The Frontier Commission slices 1–3 (Milestones A–G) are implemented. Accepted
+The Frontier Commission slices 1–3 (Milestones A–G) are implemented; generated
+contracts now use central castles and multi-directional, unequal sieges with
+banded scout intel and edge warnings (see Verification). Accepted
 slices 1–2 (22a87bd, c8de882) are extended with four visible engineering skills,
 slow UI-owned career progression, seeded contracts for Compact Town, Twin
 Settlements and Town + Outpost, deterministic validation/reseeding/fallback,
@@ -238,8 +240,31 @@ and the next Start snapshots that grown preparation; retries cannot duplicate it
 The third victory's payout is applied by Continue before `complete` is entered.
 
 ## Verification
-After the generator-variety correction `npm test`: **170 passed, 0 failed**
-(110 unchanged Canyon tests, 60 Frontier tests). The variety test (30 seeds per
+After central castles and multi-directional sieges `npm test`: **174 passed,
+0 failed** (110 unchanged Canyon tests, 64 Frontier tests). New
+`test/frontier-fronts.test.js` sweeps 30 seeds per archetype: keep ≤7 tiles
+from centre (twin keeps ≥14 apart, flanking the centre), all eight directions
+and ≥3 plan types per archetype, edge entries ≥8 tiles from districts, every
+enemy entering through its front, unequal per-wave shares with a ≥50% main
+front; scout reports name every front with no exact figures; the edge warning
+fires 5 s before a front's first entry; the handcrafted contract has no fronts.
+Controller screenshots at 1366×768 checked prep arrows/labels for all three
+archetypes and the battle INCOMING pulse.
+
+| Seed 1 plan (equal cost) | Budget | Spend | District curtains | Map-edge wall | Result | Preserved | Keep HP |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | --- |
+| Compact, scout-weighted | 827 G | 720 G | 3160 G | 3760 G | Victory | 100% | 2000 |
+| Compact, even ring | 827 G | 720 G | | | Victory | 95.3% | 1740 |
+| Twin, scout-weighted | 903 G | 840 G | 3200 G | 3760 G | Victory | 81.7% | 1740 / 2000 |
+| Twin, even ring | 903 G | 840 G | | | Victory | 68.5% | 440 / 2000 |
+| Outpost, scout-weighted | 813 G | 720 G | 3120 G | 3760 G | Victory | 91.5% | 2000 |
+| Outpost, even ring | 813 G | 720 G | | | Victory | 86.7% | 1220 |
+
+A 12-seed sweep per archetype: all-in on the main front often lost (diversions
+and second waves reach the keep); scout-weighted won 30/36, even rings 28/36,
+each beating the other on different seeds — intel helps, no naive plan dominates.
+
+Earlier (generator-variety correction): **170 passed**. The variety test (30 seeds per
 archetype: ≥3 terrain patterns, ≥8 keep positions, ≥6 budgets, varied districts,
 rivers one four-connected edge-to-edge channel with 1–3 crossings and no porous
 gaps) was confirmed to fail against the slice-3 generator before passing.
@@ -262,9 +287,8 @@ Final deterministic balance measurements (starter skills, except Communication
 | Twin Settlements / seed 3 | 720 G | 720 G | 3440 G | Victory | 73.3% | 2000 / 1220 |
 | Town + Outpost / seed 1 | 720 G | 720 G | 3680 G | Victory | 73.8% | 2000 |
 
-Table measured before the variety correction (generated budgets were then
-clamped at 720 G); the same per-archetype balance tests still pass with the new
-budget formula.
+Historical table, measured before the variety correction and before central
+castles (generated rows no longer reproduce; see the seed-1 table above).
 
 Generated fixtures choose the first seed with an optional special objective
 from initial briefing data, then use public previews/placements to concentrate
@@ -376,6 +400,8 @@ UI layout at 1366×768 and final aesthetics remain for controller/Claude review.
 ## Known Issues / Next Steps
 - No known failing headless checks remain for slice 3. Controller behavioral
   acceptance, human playtesting and final visual review remain incomplete.
+- Generated sieges now attack from any of eight directions with unequal
+  fronts and optional second waves; balance is a 12-seed headless sweep only.
 - The generator intentionally uses four authored geographic patterns, not
   unrestricted terrain synthesis. Maps author no pendulum sites. Careers
   persist only skill levels, development points and completed-contract count;

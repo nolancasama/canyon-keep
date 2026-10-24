@@ -157,7 +157,8 @@ export function createFrontierTerrain(map){
     const crossing=t!=='#'&&(map.features||[]).find(f=>(f.kind==='ford'||f.kind==='bridge')&&x>=f.x&&x<f.x+f.w&&y>=f.y&&y<f.y+f.h);
     if(crossing?.kind==='ford'){c.fillStyle='#5f8f8c';c.fillRect(px,py,TILE,TILE);c.fillStyle='#b9b596';for(let n=0;n<4;n++){c.beginPath();c.ellipse(px+3+(n%2)*9+noise(x,y,n)*4,py+4+(n>>1)*9+noise(x,y,n+3)*3,3.2,2.4,0,0,Math.PI*2);c.fill();}}
     else if(crossing){c.fillStyle='#3d7278';c.fillRect(px,py,TILE,TILE);c.fillStyle='#8a6440';c.fillRect(px,py+2,TILE,TILE-4);c.strokeStyle='#5a3e26';c.lineWidth=1;for(let n=4;n<TILE;n+=5){c.beginPath();c.moveTo(px+n,py+2);c.lineTo(px+n,py+TILE-2);c.stroke();}c.fillStyle='#4a3220';c.fillRect(px,py+1,TILE,2);c.fillRect(px,py+TILE-3,TILE,2);}
-    if(t==='S'){c.fillStyle='#b5563d';c.beginPath();c.moveTo(px+16,py+4);c.lineTo(px+5,py+10);c.lineTo(px+16,py+16);c.closePath();c.fill();}
+    // Entry chevrons point inward from whichever edge they sit on.
+    if(t==='S'){const r=x===0?0:y===0?Math.PI/2:x===WIDTH-1?Math.PI:-Math.PI/2;c.save();c.translate(px+10,py+10);c.rotate(r);c.fillStyle='#b5563d';c.beginPath();c.moveTo(6,0);c.lineTo(-5,-6);c.lineTo(-5,6);c.closePath();c.fill();c.restore();}
   }
   for(const r of map.roads||[]){c.fillStyle='#c4af7f';c.fillRect(r.x*TILE,r.y*TILE,TILE,TILE);c.fillStyle='#e0cb9730';c.fillRect(r.x*TILE+3,r.y*TILE+8,12,3);}
   c.strokeStyle='#cfca8b55';c.lineWidth=1;c.setLineDash([5,5]);for(const d of map.districts||[])if(d.w&&d.h)c.strokeRect(d.x*TILE,d.y*TILE,d.w*TILE,d.h*TILE);c.setLineDash([]);
