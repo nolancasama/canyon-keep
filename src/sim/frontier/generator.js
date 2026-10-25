@@ -1,5 +1,5 @@
 import { CONFIG } from '../../config.js';
-import { WIDTH, HEIGHT } from '../../data/map.js';
+import { FRONTIER_WIDTH as WIDTH, FRONTIER_HEIGHT as HEIGHT } from '../../data/frontier/map.js';
 import { FRONTIER_MAP } from '../../data/frontier/map.js';
 import { FRONTIER_SIEGE } from '../../data/frontier/siege.js';
 import { frontierSettlement, frontierRequests } from '../../data/frontier/settlement.js';
