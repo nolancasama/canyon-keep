@@ -119,7 +119,7 @@ export const CONFIG = {
       minDistrictValue: 300,
       guardCounts: [3,4,5], farmIntactFraction: 0.8, specialReward: 80, specialPenalty: 60,
       footCount: [3,5], extraWaveCount: [0,2], placementAttempts: 160,
-      centreJitter: { x: 3, y: 2 }, ringRadius: { x: 19, y: 17 }, farRadius: { x: 24, y: 23 },
+      centreJitter: { x: 3, y: 4 }, ringRadius: { x: 19, y: 17 }, farRadius: { x: 24, y: 23 },
       spawnDistrictDistance: 12, spawnSlide: 28, edgeMargin: 5 },
     // Generated sieges: unequal multi-directional fronts. Strength weights
     // approximate threat; bands drive the approximate scout intel.
