@@ -27,7 +27,7 @@
 .frontier-budget{font-size:10px;line-height:1.4;max-width:520px;min-width:300px}.frontier-budget>strong{display:block;font-size:9px;letter-spacing:1px;color:var(--gold);margin-bottom:3px}.budget-figures{display:grid;grid-template-columns:1fr 1fr;gap:2px 16px}.budget-figures>span{display:flex;justify-content:space-between;gap:8px;color:var(--muted)}.budget-figures b{color:var(--text);font-weight:500;white-space:nowrap}.frontier-budget>small{display:block;font-size:9px;color:var(--muted);margin-top:4px}.advanced-scouting{border-top:1px solid var(--edge);padding-top:8px;margin-bottom:14px}.advanced-scouting>button{font-size:11px;padding:7px 10px}.advanced-scouting>small{display:block;color:var(--muted);font-size:10px;margin-top:4px}.advanced-scouting h3{font-size:12px;color:var(--gold);margin:12px 0 4px}.advanced-scouting li+li{margin-top:4px}.frontier-screen .bottombar:has(.frontier-budget){column-gap:12px}.frontier-screen .bottombar:has(.frontier-budget) .siege-start{width:235px}.frontier-screen .bottombar:has(.frontier-budget) .actions{flex-wrap:wrap;justify-content:flex-end;max-width:650px}
 
 /* Frontier Commission uses a true square battlefield, while the original canyon remains 16:9. */
-.canvas-wrap.frontier-map{width:min(100%,calc((100dvh - 260px)*1));max-width:1280px}
-@media(min-width:761px){.canvas-wrap.frontier-map.prep-map{width:min(100%,calc((100dvh - 320px)*1))}}
+.canvas-wrap.frontier-map{width:min(100%,800px);max-width:1280px}
+@media(min-width:761px){.canvas-wrap.frontier-map.prep-map{width:min(100%,800px)}}
 @media(max-width:760px){.canvas-wrap.frontier-map,.canvas-wrap.frontier-map.prep-map{width:100%}}
 .canvas-wrap.frontier-map canvas{aspect-ratio:1/1;height:auto}
