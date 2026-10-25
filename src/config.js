@@ -115,12 +115,12 @@ export const CONFIG = {
       golemReturnBonus: [0, 0, 0.1, 0.15],
       reputationScores: { 'Exceptional Engineering': 4, 'Strong Defense': 3, 'Acceptable Defense': 2, 'Costly Victory': 1, 'Contract Failed': 0 },
       completionPoints: 1, exceptionalPoints: 2 },
-    generator: { maxAttempts: 8, objectiveSpawnDistance: 7, minDefensiveTiles: 12,
+    generator: { maxAttempts: 20, objectiveSpawnDistance: 7, minDefensiveTiles: 12,
       minDistrictValue: 300,
       guardCounts: [3,4,5], farmIntactFraction: 0.8, specialReward: 80, specialPenalty: 60,
       footCount: [3,5], extraWaveCount: [0,2], placementAttempts: 160,
-      centreJitter: { x: 3, y: 2 }, ringRadius: { x: 19, y: 10 }, farRadius: { x: 24, y: 12 },
-      spawnDistrictDistance: 8, spawnSlide: 22, edgeMargin: 2 },
+      centreJitter: { x: 3, y: 2 }, ringRadius: { x: 19, y: 17 }, farRadius: { x: 24, y: 23 },
+      spawnDistrictDistance: 12, spawnSlide: 28, edgeMargin: 5 },
     // Generated sieges: unequal multi-directional fronts. Strength weights
     // approximate threat; bands drive the approximate scout intel.
     fronts: { strength: { foot: 1, chiseler: 1.5, powder: 2, boss: 8 },
