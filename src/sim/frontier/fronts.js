@@ -1,5 +1,5 @@
 import { CONFIG } from '../../config.js';
-import { WIDTH, HEIGHT } from '../../data/map.js';
+import { FRONTIER_WIDTH as WIDTH, FRONTIER_HEIGHT as HEIGHT } from '../../data/frontier/map.js';
 import { siegeFor } from '../../data/stages.js';
 import { emit } from '../grid.js';
 
