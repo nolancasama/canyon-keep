@@ -146,7 +146,7 @@ export function createFrontierTerrain(map){
   const mapWidth=map.map[0].length,mapHeight=map.map.length;
   const canvas=document.createElement('canvas');canvas.width=mapWidth*TILE;canvas.height=mapHeight*TILE;const c=canvas.getContext('2d');
   c.fillStyle='#899568';c.fillRect(0,0,canvas.width,canvas.height);
-  for(let y=0;y<HEIGHT;y++)for(let x=0;x<WIDTH;x++){
+  for(let y=0;y<mapHeight;y++)for(let x=0;x<mapWidth;x++){
     const px=x*TILE,py=y*TILE,t=map.map[y][x];
     if(t==='C'||t==='K'){c.fillStyle='#a1a37a';c.fillRect(px,py,TILE,TILE);}
     for(let n=0;n<3;n++){c.fillStyle=n?'#d2cf9a24':'#3e593130';c.fillRect(px+noise(x,y,n)*18,py+noise(x,y,n+6)*18,2,1);}
