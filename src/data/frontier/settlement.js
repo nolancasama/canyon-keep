@@ -58,7 +58,9 @@ const authored=[
 ];
 
 export function frontierSettlement() {
-  return authored.map(data=>{
+  // Keep authored property layout aligned with the expanded square Frontier map.
+  return authored.map(source=>{
+    const data=source.id==='keep'?source:{...source,y:source.y+14};
     const def=CONFIG.structures[data.type],property=CONFIG.frontier.property[data.valueKey??data.type];
     const request=data.request?CONFIG.frontier.requests[data.request]:null;
     return {...data,...(data.selfDefense?{selfDefense:{...data.selfDefense}}:{}),owner:{...data.owner},w:def.w,h:def.h,hp:property.initialHp??def.hp,maxHp:def.hp,
