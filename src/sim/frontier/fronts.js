@@ -21,26 +21,27 @@ export function edgeAnchor(direction) {
 export const bandFor=share=>share>=CONFIG.frontier.fronts.bands.major?'major':share>=CONFIG.frontier.fronts.bands.secondary?'secondary':'minor';
 
 // Main direction first, then distinct offsets so no two fronts share a side.
+// Commit to meaningful approaches on two, three or four distinct map sides.
+// One-sided raids leave too much of the settlement effectively safe.
 export function chooseFrontPlan(integer,chance) {
-  const rules=CONFIG.frontier.fronts,types=Object.keys(rules.plans),type=types[integer(0,types.length-1)];
-  const main=integer(0,7),pct=range=>integer(range[0],range[1])/100,spec=rules.plans[type];
-  let offsets=[],shares=[1];
-  if(type==='mainSecondary') {offsets=[integer(2,6)];const m=pct(spec.main);shares=[m,1-m];}
-  else if(type==='mainDiversion') {
-    const m=pct(spec.main),two=chance(.5);offsets=two?[integer(2,3),integer(5,6)]:[integer(2,6)];
-    shares=two?[m,(1-m)*.6,(1-m)*.4]:[m,1-m];
-  } else if(type==='encirclement') {
-    const m=pct(spec.main),four=chance(.5);offsets=four?[2,4,6]:[integer(2,3),integer(5,6)];
-    shares=four?[m,(1-m)*.45,(1-m)*.33,(1-m)*.22]:[m,(1-m)*.6,(1-m)*.4];
+  const rules=CONFIG.frontier.fronts,roll=integer(1,100);
+  const count=roll<=25?2:roll<=80?3:4;
+  const type=count===2?'mainSecondary':count===3?'mainDiversion':'encirclement';
+  const main=integer(0,7),chosen=[main],occupied=new Set([edgeAnchor(main).edge]);
+  for(let n=1;n<count;n++) {
+    const options=FRONT_DIRECTIONS.map((_,i)=>i).filter(i=>!occupied.has(edgeAnchor(i).edge));
+    if(!options.length) break;
+    const direction=options[integer(0,options.length-1)];
+    chosen.push(direction);occupied.add(edgeAnchor(direction).edge);
   }
-  const fronts=[main,...offsets.map(o=>(main+o)%8)].map((direction,i)=>({id:`front-${FRONT_DIRECTIONS[direction].id.toLowerCase()}`,direction,target:[shares[i]],wave:1}));
-  // A second wave may swing the main assault onto another front, or onto a
-  // fresh direction when the plan had a single front.
+  const mainShare=count===2?integer(62,75)/100:count===3?integer(55,65)/100:integer(51,57)/100;
+  const rest=1-mainShare;
+  const shares=count===2?[mainShare,rest]:count===3?[mainShare,rest*.56,rest*.44]:[mainShare,rest*.42,rest*.33,rest*.25];
+  const fronts=chosen.map((direction,i)=>({id:`front-${FRONT_DIRECTIONS[direction].id.toLowerCase()}`,direction,target:[shares[i]],wave:1}));
   if(chance(rules.waveTwoChance)) {
-    let shift=fronts.length>1?fronts[integer(1,fronts.length-1)]:null;
-    if(!shift) {const direction=(main+integer(2,6))%8;shift={id:`front-${FRONT_DIRECTIONS[direction].id.toLowerCase()}`,direction,target:[0],wave:2};fronts.push(shift);}
+    const shift=fronts[integer(1,fronts.length-1)];
     const second=fronts.map(f=>f===shift?rules.waveTwoMain:f===fronts[0]?1-rules.waveTwoMain:0);
-    for(const [i,f] of fronts.entries()) f.target[1]=second[i];
+    for(const [i,f] of fronts.entries())f.target[1]=second[i];
   }
   return {type,fronts};
 }
