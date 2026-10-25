@@ -1,9 +1,10 @@
 import { CONFIG } from '../config.js';
-import { WIDTH, HEIGHT, KEEP } from '../data/map.js';
+import { KEEP } from '../data/map.js';
+import { stageFor } from '../data/stages.js';
 import { isWalkable, tileAt, structureAt, blocksStructure } from './grid.js';
 
 const directions = [[1,0],[0,1],[-1,0],[0,-1]];
-const index = (x,y) => y * WIDTH + x;
+const index = (x,y,width) => y * width + x;
 function cost(state,x,y,enemyType) {
   const structure = structureAt(state,x,y);
   const weights=state.stageId==='frontier'?CONFIG.frontier.breachWeights[enemyType??'foot']:null;
@@ -14,7 +15,8 @@ function cost(state,x,y,enemyType) {
 
 // Reverse Dijkstra: a predecessor pays the cost of entering the current tile.
 function buildFlow(state, target, enemyType) {
-  const distances = Array(WIDTH * HEIGHT).fill(null);
+  const map=stageFor(state).map.map,width=map[0].length,height=map.length;
+  const distances = Array(width * height).fill(null);
   const heap = [];
   function push(node) {
     heap.push(node);
@@ -44,22 +46,22 @@ function buildFlow(state, target, enemyType) {
     ? state.structures.filter(s=>s.type==='keep'&&!s.destroyed&&s.hp>0)
     : [state.structures.find(s => s.type === 'keep') || { ...KEEP, w:3, h:3 }];
   for(const keep of keeps) for (let y=keep.y;y<keep.y+keep.h;y++) for (let x=keep.x;x<keep.x+keep.w;x++) {
-    distances[index(x,y)] = 0; push([0,x,y]);
+    distances[index(x,y,width)] = 0; push([0,x,y]);
   }
   while (heap.length) {
     const [distance,x,y] = pop();
-    if (distance !== distances[index(x,y)]) continue;
+    if (distance !== distances[index(x,y,width)]) continue;
     const stepCost = cost(state,x,y,enemyType);
     for (const [dx,dy] of directions) {
       const nx=x+dx, ny=y+dy;
-      if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny,state)) continue;
-      const candidate=distance+stepCost, id=index(nx,ny);
+      if (nx<0 || ny<0 || nx>=width || ny>=height || !isWalkable(nx,ny,state)) continue;
+      const candidate=distance+stepCost, id=index(nx,ny,width);
       if (distances[id] === null || candidate < distances[id]) {
         distances[id]=candidate; push([candidate,nx,ny]);
       }
     }
   }
-  return { distances, revision:state.flowRevision };
+  return { distances, revision:state.flowRevision, width, height };
 }
 
 export function rebuildFlow(state) { state.flow=buildFlow(state);return state.flow; }
@@ -74,12 +76,13 @@ export function nextStep(state,x,y,target=null,enemyType='foot') {
     const cached=(state.propertyFlows??={})[target.id];
     flow=cached?.revision===state.flowRevision?cached:(state.propertyFlows[target.id]=buildFlow(state,target));
   }
+  const {width,height}=flow;
   x=Math.floor(x); y=Math.floor(y);
   let best=null, bestCost=Infinity;
   for (const [dx,dy] of directions) {
     const nx=x+dx,ny=y+dy;
-    if (nx<0 || ny<0 || nx>=WIDTH || ny>=HEIGHT || !isWalkable(nx,ny,state)) continue;
-    const distance=flow.distances[index(nx,ny)];
+    if (nx<0 || ny<0 || nx>=width || ny>=height || !isWalkable(nx,ny,state)) continue;
+    const distance=flow.distances[index(nx,ny,width)];
     if (distance===null) continue;
     const total=distance+cost(state,nx,ny,enemyType);
     if (total<bestCost) { bestCost=total; best={x:nx,y:ny}; }
