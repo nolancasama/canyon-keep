@@ -5,11 +5,12 @@ import { stageFor } from '../data/stages.js';
 import { noteEnemyStructureDamage } from './frontier/repair.js';
 import { awakenFrontierGolem, frontierGolemDied } from './frontier/golems.js';
 
-export function inBounds(x, y) {
-  return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
+export function inBounds(x, y, state) {
+  const map=state?stageFor(state).map.map:MAP;
+  return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < map[0].length && y < map.length;
 }
 
-export function tileAt(x, y, state) { return inBounds(x, y) ? (state ? stageFor(state).map.map : MAP)[y][x] : '#'; }
+export function tileAt(x, y, state) { return inBounds(x, y, state) ? (state ? stageFor(state).map.map : MAP)[y][x] : '#'; }
 export function isWalkable(x, y, state) { return '.CKS'.includes(tileAt(x, y, state)); }
 
 export function structureAt(state, x, y) {
