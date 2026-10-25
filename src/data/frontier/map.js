@@ -16,7 +16,7 @@ for(let y=1;y<HEIGHT-1;y++) {
   if(y<30||y>34) for(let dx=0;dx<2;dx++) cells[y][x+dx]='#';
 }
 features.push({kind:'ford',x:35,y:30,w:2,h:5});
-for(const [left,top,w,h] of [[12,15,5,3],[29,46,4,4],[43,33,3,3],[54,52,5,3]] {
+for(const [left,top,w,h] of [[12,15,5,3],[29,46,4,4],[43,33,3,3],[54,52,5,3]]) {
   for(let y=top;y<top+h;y++) for(let x=left;x<left+w;x++) cells[y][x]='#';
 }
 for(let y=24;y<=40;y++) for(let x=13;x<=31;x++) cells[y][x]='C';
