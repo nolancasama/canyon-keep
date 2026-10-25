@@ -59,7 +59,7 @@ export function majorRoadExits(state) {
   const map=stageFor(state).map;
   const roads=map.roads??[],roadIds=new Set(roads.map(p=>p.y*WIDTH+p.x));
   const unwrittenEntries=map.spawns.filter(spawn=>!roadIds.has(spawn.y*WIDTH+spawn.x));
-  return roads.filter(p=>p.x===0||p.y===0||p.x===WIDTH-1||p.y===HEIGHT-1||
+  return roads.filter(p=>p.x===0||p.y===0||p.x===WIDTH-1||p.y===map.map.length-1||
     unwrittenEntries.some(spawn=>Math.abs(spawn.x-p.x)+Math.abs(spawn.y-p.y)===1));
 }
 
