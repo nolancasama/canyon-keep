@@ -38,7 +38,7 @@ test('each Frontier archetype produces usable clustered maps across thirty deter
       assert.notEqual(contract.map.map[y][x],'#');
     }
     for(const entry of contract.map.spawns) {
-      assert.ok(entry.x===0||entry.x===63||entry.y===0||entry.y===35,label);
+      assert.ok(entry.x===0||entry.x===contract.map.map[0].length-1||entry.y===0||entry.y===contract.map.map.length-1,label);
       assert.notEqual(contract.map.map[entry.y][entry.x],'#');
     }
   }
